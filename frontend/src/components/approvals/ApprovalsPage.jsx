@@ -13,7 +13,7 @@ export default function ApprovalsPage() {
 
   const load = () => {
     setLoading(true);
-    listIncidents()
+    listIncidents("operational")
       .then(async (incidents) => {
         const waiting = incidents.filter((i) => i.status === "WAITING_APPROVAL");
         const withPlans = await Promise.all(

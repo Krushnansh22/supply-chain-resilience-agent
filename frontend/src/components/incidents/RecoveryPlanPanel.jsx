@@ -56,12 +56,14 @@ export default function RecoveryPlanPanel({ plan, incidentId, onExecuted }) {
         <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{plan.recommendation_reason}</p>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
+      <div className="decision-rationale">
+        <strong>{plan.requires_human_approval ? "Why approval is required" : "Why the agent can act"}</strong>
+        <p>{approvalReason}</p>
+        {incident?.status && <span className="activity-count">Current incident state: {incident.status.replaceAll("_", " ")}</span>}
+      </div>
 
       {!plan.requires_human_approval && (
-        <button className="btn-primary" disabled={executing} onClick={handleExecute}>
-          {executing ? "Executing…" : "▶ EXECUTE"}
-        </button>
+        <div className="badge badge-low">AUTONOMOUS EXECUTION — agent will apply this plan</div>
       )}
       {plan.requires_human_approval && (
         <span className="badge badge-high">HUMAN APPROVAL REQUIRED — see below</span>

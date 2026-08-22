@@ -71,7 +71,7 @@ export default function ApprovalCard({ plan, incident, onDecided }) {
 
       <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 14 }}>
         <strong style={{ color: "var(--text-primary)" }}>Why approval is required: </strong>
-        Recommended option (${recommended?.total_cost.toLocaleString()}) exceeds the ${plan.approval_threshold_usd.toLocaleString()} autonomous-execution limit.
+        This plan costs ${recommended?.total_cost.toLocaleString()} and exceeds the ${plan.approval_threshold_usd.toLocaleString()} autonomous-execution limit by ${((recommended?.total_cost ?? 0) - plan.approval_threshold_usd).toLocaleString()}.
       </p>
 
       <p style={{ fontSize: 13 }}>

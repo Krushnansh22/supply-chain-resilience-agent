@@ -15,31 +15,43 @@ RECEIVES calls from n8n nodes (authenticated via X-API-Key header):
 DELIVERS:
   - Upserted documents in MongoDB collections
   - incident_id when a new incident is created (used by n8n to trigger the AI agent)
+
+SECURITY HARDENING:
+  - Constant-time API key verification (secrets.compare_digest)
+  - Rate limiting on all mutating and PDF/CSV report generation endpoints
+  - Strict regex parameter validation preventing Header Injection & NoSQL injection
+  - Strict Pydantic payload sanitization
 """
 
 import csv
 import io
-from datetime import datetime
-from fastapi import APIRouter, Depends, Header, HTTPException
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+import secrets
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import Response
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Any
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
 from app.config import settings
+from app.middleware.rate_limiter import check_rate_limit
 
 router = APIRouter()
 
+_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
+
 
 # ---------------------------------------------------------------------------
-# Auth helper
+# Auth helper (Constant-time verified)
 # ---------------------------------------------------------------------------
 
 def verify_api_key(x_api_key: str = Header(default="")):
-    """Simple shared-secret auth for n8n -> backend calls."""
-    if settings.BACKEND_API_KEY and x_api_key != settings.BACKEND_API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
+    """Constant-time verified shared-secret auth for n8n -> backend calls."""
+    expected_key = settings.BACKEND_API_KEY or settings.API_KEY
+    if expected_key:
+        if not x_api_key or not secrets.compare_digest(x_api_key, expected_key):
+            raise HTTPException(status_code=401, detail="Invalid or missing X-API-Key")
 
 
 # ---------------------------------------------------------------------------
@@ -47,33 +59,39 @@ def verify_api_key(x_api_key: str = Header(default="")):
 # ---------------------------------------------------------------------------
 
 class ERPEventPayload(BaseModel):
-    event_id: Optional[str] = None
-    event_type: str
-    timestamp: Optional[str] = None
-    po_id: str
-    supplier_id: str
-    component_id: str
+    model_config = ConfigDict(extra="ignore")
+
+    event_id: Optional[str] = Field(None, max_length=64)
+    event_type: str = Field(..., max_length=64)
+    timestamp: Optional[str] = Field(None, max_length=64)
+    po_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
+    supplier_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
+    component_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
     quantity: Optional[float] = None
     unit_price: Optional[float] = None
-    expected_delivery: Optional[str] = None
-    status: Optional[str] = None
-    source: Optional[str] = "erp"
+    expected_delivery: Optional[str] = Field(None, max_length=64)
+    status: Optional[str] = Field(None, max_length=32)
+    source: Optional[str] = Field("erp", max_length=32)
 
 
 class DeliveryBreachPayload(BaseModel):
-    event_type: str = "DELIVERY_COMMITMENT_BREACH"
-    po_id: str
-    supplier_id: str
-    component_id: str
-    promised_date: Optional[str] = None
-    current_expected_date: Optional[str] = None
+    model_config = ConfigDict(extra="ignore")
+
+    event_type: str = Field("DELIVERY_COMMITMENT_BREACH", max_length=64)
+    po_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
+    supplier_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
+    component_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
+    promised_date: Optional[str] = Field(None, max_length=64)
+    current_expected_date: Optional[str] = Field(None, max_length=64)
     delay_days: int = 0
 
 
 class SupplierResponsePayload(BaseModel):
-    rfq_id: str
-    supplier_id: str
-    component_id: str
+    model_config = ConfigDict(extra="ignore")
+
+    rfq_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
+    supplier_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
+    component_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
     quantity: Optional[float] = None
     unit_price: Optional[float] = None
     delivery_days: Optional[int] = None
@@ -81,42 +99,45 @@ class SupplierResponsePayload(BaseModel):
     expedite_available: bool = False
     expedite_fee: Optional[float] = None
     accepted: Optional[bool] = None
-    timestamp: Optional[str] = None
+    timestamp: Optional[str] = Field(None, max_length=64)
 
 
 class AuditEventPayload(BaseModel):
-    event_id: Optional[str] = None
-    timestamp: Optional[str] = None
-    source: str = "n8n"
-    workflow: str
-    event_type: str
-    incident_id: Optional[str] = None
-    entity_type: Optional[str] = None
-    entity_id: Optional[str] = None
-    action: Optional[str] = None
-    status: str = "SUCCESS"
+    model_config = ConfigDict(extra="ignore")
+
+    event_id: Optional[str] = Field(None, max_length=64)
+    timestamp: Optional[str] = Field(None, max_length=64)
+    source: str = Field("n8n", max_length=64)
+    workflow: str = Field(..., max_length=128)
+    event_type: str = Field(..., max_length=64)
+    incident_id: Optional[str] = Field(None, max_length=64)
+    entity_type: Optional[str] = Field(None, max_length=64)
+    entity_id: Optional[str] = Field(None, max_length=64)
+    action: Optional[str] = Field(None, max_length=128)
+    status: str = Field("SUCCESS", max_length=32)
     input: Optional[dict] = {}
     output: Optional[dict] = {}
-    # Enhanced fields for full observability
-    correlation_id: Optional[str] = None
+    correlation_id: Optional[str] = Field(None, max_length=64)
     retry_count: int = 0
-    error_details: Optional[str] = None
-    notification_status: Optional[str] = None
-    erp_log_ref: Optional[str] = None
+    error_details: Optional[str] = Field(None, max_length=1024)
+    notification_status: Optional[str] = Field(None, max_length=64)
+    erp_log_ref: Optional[str] = Field(None, max_length=64)
 
 
 class ERPLogPayload(BaseModel):
-    log_id: Optional[str] = None
-    timestamp: Optional[str] = None
-    action: str                          # PO_CREATED, STATUS_UPDATE, INVENTORY_UPDATE, etc.
-    entity_type: str                     # PURCHASE_ORDER, INCIDENT, INVENTORY, etc.
-    entity_id: str
-    incident_id: Optional[str] = None
-    performed_by: str = "n8n"
+    model_config = ConfigDict(extra="ignore")
+
+    log_id: Optional[str] = Field(None, max_length=64)
+    timestamp: Optional[str] = Field(None, max_length=64)
+    action: str = Field(..., max_length=64)
+    entity_type: str = Field(..., max_length=64)
+    entity_id: str = Field(..., max_length=64)
+    incident_id: Optional[str] = Field(None, max_length=64)
+    performed_by: str = Field("n8n", max_length=64)
     details: Optional[dict] = {}
-    status: str = "SUCCESS"
-    correlation_id: Optional[str] = None
-    error_details: Optional[str] = None
+    status: str = Field("SUCCESS", max_length=32)
+    correlation_id: Optional[str] = Field(None, max_length=64)
+    error_details: Optional[str] = Field(None, max_length=1024)
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +147,7 @@ class ERPLogPayload(BaseModel):
 @router.post("/erp/event")
 def erp_event(
     payload: ERPEventPayload,
+    request: Request,
     db: Database = Depends(get_mongo_db),
     _auth=Depends(verify_api_key),
 ):
@@ -134,7 +156,8 @@ def erp_event(
     Upserts the PO in MongoDB. If status is DELAYED, creates an incident and returns
     the incident_id so n8n can trigger the AI agent.
     """
-    now = datetime.utcnow()
+    check_rate_limit(request, bucket="n8n_erp_event", max_calls=120, window_seconds=60)
+    now = datetime.now(timezone.utc)
 
     # Upsert purchase order
     po_doc = {
@@ -208,6 +231,7 @@ def get_active_purchase_orders(
 @router.post("/delivery-breach")
 def delivery_breach(
     payload: DeliveryBreachPayload,
+    request: Request,
     db: Database = Depends(get_mongo_db),
     _auth=Depends(verify_api_key),
 ):
@@ -215,7 +239,8 @@ def delivery_breach(
     n8n Delivery Commitment Monitor calls this when it detects a delivery breach.
     Creates a DELIVERY_COMMITMENT_BREACH incident and returns the incident_id.
     """
-    now = datetime.utcnow()
+    check_rate_limit(request, bucket="n8n_breach", max_calls=60, window_seconds=60)
+    now = datetime.now(timezone.utc)
 
     # Check for existing open incident for this PO
     existing = db["incidents"].find_one(
@@ -258,6 +283,7 @@ def delivery_breach(
 @router.post("/supplier-response")
 def supplier_response(
     payload: SupplierResponsePayload,
+    request: Request,
     db: Database = Depends(get_mongo_db),
     _auth=Depends(verify_api_key),
 ):
@@ -265,7 +291,8 @@ def supplier_response(
     n8n Supplier Response Sync calls this when a supplier responds to an RFQ.
     Upserts the RFQ response and returns any ranked options from existing recovery plans.
     """
-    now = datetime.utcnow()
+    check_rate_limit(request, bucket="n8n_supplier_resp", max_calls=60, window_seconds=60)
+    now = datetime.now(timezone.utc)
 
     rfq_doc = {
         "rfq_id": payload.rfq_id,
@@ -304,6 +331,7 @@ def supplier_response(
 @router.post("/audit")
 def ingest_audit_event(
     payload: AuditEventPayload,
+    request: Request,
     db: Database = Depends(get_mongo_db),
     _auth=Depends(verify_api_key),
 ):
@@ -311,7 +339,8 @@ def ingest_audit_event(
     n8n Internal Audit Webhook — persists a canonical audit event to MongoDB Atlas.
     Called by every workflow section as the final step. No HTTP self-loop.
     """
-    now = datetime.utcnow()
+    check_rate_limit(request, bucket="n8n_audit", max_calls=120, window_seconds=60)
+    now = datetime.now(timezone.utc)
     event_id = payload.event_id or f"AUD-{int(now.timestamp() * 1000)}"
     entry = {
         "event_id": event_id,
@@ -355,6 +384,7 @@ def ingest_audit_event(
 @router.post("/erp/log")
 def erp_log(
     payload: ERPLogPayload,
+    request: Request,
     db: Database = Depends(get_mongo_db),
     _auth=Depends(verify_api_key),
 ):
@@ -362,7 +392,8 @@ def erp_log(
     n8n logs every ERP update action here for full traceability.
     Called after: PO creation, inventory updates, incident status changes.
     """
-    now = datetime.utcnow()
+    check_rate_limit(request, bucket="n8n_erp_log", max_calls=120, window_seconds=60)
+    now = datetime.now(timezone.utc)
     log_id = payload.log_id or f"ERP-LOG-{int(now.timestamp() * 1000)}"
     entry = {
         "log_id": log_id,
@@ -384,9 +415,9 @@ def erp_log(
 
 @router.get("/erp/logs")
 def get_erp_logs(
-    incident_id: Optional[str] = None,
-    entity_id: Optional[str] = None,
-    limit: int = 100,
+    incident_id: Optional[str] = Query(None, pattern=_ID_PATTERN, max_length=32),
+    entity_id: Optional[str] = Query(None, pattern=_ID_PATTERN, max_length=32),
+    limit: int = Query(100, ge=1, le=500),
     db: Database = Depends(get_mongo_db),
     _auth=Depends(verify_api_key),
 ):
@@ -414,13 +445,15 @@ _AUDIT_CSV_COLUMNS = [
 
 @router.get("/audit/report/csv")
 def audit_report_csv(
-    incident_id: Optional[str] = None,
+    request: Request,
+    incident_id: Optional[str] = Query(None, pattern=_ID_PATTERN, max_length=32),
     db: Database = Depends(get_mongo_db),
 ):
     """
     Generates and streams a CSV audit trail report.
-    Optionally filter by incident_id. No auth required (public report).
+    Optionally filter by incident_id. Rate limited to 20/min.
     """
+    check_rate_limit(request, bucket="audit_csv_report", max_calls=20, window_seconds=60)
     query: dict = {}
     if incident_id:
         query["incident_id"] = incident_id
@@ -438,9 +471,11 @@ def audit_report_csv(
         writer.writerow({col: log.get(col, "") for col in _AUDIT_CSV_COLUMNS})
 
     output.seek(0)
-    filename = f"audit_trail{'_' + incident_id if incident_id else ''}.csv"
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
+    # Safe alphanumeric filename (blocks HTTP Response Header injection)
+    safe_suffix = f"_{incident_id}" if incident_id else ""
+    filename = f"audit_trail{safe_suffix}.csv"
+    return Response(
+        content=output.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -448,13 +483,15 @@ def audit_report_csv(
 
 @router.get("/audit/report/pdf")
 def audit_report_pdf(
-    incident_id: Optional[str] = None,
+    request: Request,
+    incident_id: Optional[str] = Query(None, pattern=_ID_PATTERN, max_length=32),
     db: Database = Depends(get_mongo_db),
 ):
     """
     Generates and streams a PDF audit trail report using fpdf2.
-    Optionally filter by incident_id. No auth required (public report).
+    Optionally filter by incident_id. Rate limited to 15/min (CPU protection).
     """
+    check_rate_limit(request, bucket="audit_pdf_report", max_calls=15, window_seconds=60)
     try:
         from fpdf import FPDF
     except ImportError:
@@ -469,18 +506,21 @@ def audit_report_pdf(
     logs = list(db["audit_logs"].find(query, {"_id": 0}).sort("timestamp", 1))
 
     # --------------- Build PDF ---------------
+    def _to_latin1(text: Any) -> str:
+        return str(text or "").encode("latin-1", "replace").decode("latin-1")
+
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
 
     # Title
     pdf.set_font("Helvetica", "B", 14)
-    title = f"Supply Chain Resilience Agent — Audit Trail Report"
+    title = f"Supply Chain Resilience Agent - Audit Trail Report"
     if incident_id:
         title += f" [{incident_id}]"
-    pdf.cell(0, 10, title, ln=True, align="C")
+    pdf.cell(0, 10, _to_latin1(title), new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(0, 6, f"Generated: {datetime.utcnow().isoformat()} UTC  |  Total events: {len(logs)}", ln=True, align="C")
+    pdf.cell(0, 6, f"Generated: {datetime.now(timezone.utc).isoformat()} UTC  |  Total events: {len(logs)}", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(4)
 
     # Table header
@@ -505,17 +545,17 @@ def audit_report_pdf(
     fill = False
     for log in logs:
         row = [
-            str(log.get("event_id", ""))[:32],
-            str(log.get("correlation_id") or "")[:26],
-            str(log.get("timestamp", ""))[:40],
-            str(log.get("workflow", ""))[:26],
-            str(log.get("event_type", ""))[:28],
-            str(log.get("incident_id") or "")[:22],
-            str(log.get("entity_id") or "")[:20],
-            str(log.get("action") or "")[:18],
-            str(log.get("status", ""))[:14],
-            str(log.get("retry_count", "")),
-            str(log.get("reason") or log.get("error_details") or "")[:50],
+            _to_latin1(log.get("event_id", ""))[:32],
+            _to_latin1(log.get("correlation_id") or "")[:26],
+            _to_latin1(log.get("timestamp", ""))[:40],
+            _to_latin1(log.get("workflow", ""))[:26],
+            _to_latin1(log.get("event_type", ""))[:28],
+            _to_latin1(log.get("incident_id") or "")[:22],
+            _to_latin1(log.get("entity_id") or "")[:20],
+            _to_latin1(log.get("action") or "")[:18],
+            _to_latin1(log.get("status", ""))[:14],
+            _to_latin1(log.get("retry_count", "")),
+            _to_latin1(log.get("reason") or log.get("error_details") or "")[:50],
         ]
         pdf.set_fill_color(239, 246, 255) if fill else pdf.set_fill_color(255, 255, 255)
         for i, cell in enumerate(row):
@@ -526,25 +566,26 @@ def audit_report_pdf(
     # Summary section
     pdf.ln(6)
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 8, "Summary Statistics", ln=True)
+    pdf.cell(0, 8, "Summary Statistics", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 8)
     statuses = {}
     workflows = {}
     for log in logs:
-        s = log.get("status", "UNKNOWN")
-        w = log.get("workflow", "UNKNOWN")
+        s = _to_latin1(log.get("status", "UNKNOWN"))
+        w = _to_latin1(log.get("workflow", "UNKNOWN"))
         statuses[s] = statuses.get(s, 0) + 1
         workflows[w] = workflows.get(w, 0) + 1
     for k, v in sorted(statuses.items()):
-        pdf.cell(0, 5, f"  Status {k}: {v} events", ln=True)
+        pdf.cell(0, 5, f"  Status {k}: {v} events", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
     for k, v in sorted(workflows.items(), key=lambda x: -x[1]):
-        pdf.cell(0, 5, f"  Workflow {k}: {v} events", ln=True)
+        pdf.cell(0, 5, f"  Workflow {k}: {v} events", new_x="LMARGIN", new_y="NEXT")
 
     pdf_bytes = bytes(pdf.output())
-    filename = f"audit_trail{'_' + incident_id if incident_id else ''}.pdf"
-    return StreamingResponse(
-        io.BytesIO(pdf_bytes),
+    safe_suffix = f"_{incident_id}" if incident_id else ""
+    filename = f"audit_trail{safe_suffix}.pdf"
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

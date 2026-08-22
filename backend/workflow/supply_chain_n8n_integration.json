@@ -1,0 +1,2149 @@
+{
+  "name": "Supply Chain Resilience Agent — Complete Automation Platform",
+  "nodes": [
+
+    {
+      "id": "sticky-s1",
+      "name": "📦 SECTION 1 — ERP EVENT RECEIVER",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, -200],
+      "parameters": {
+        "content": "## 📦 SECTION 1 — ERP EVENT RECEIVER\n\n**Agent: ERP_EVENT_RECEIVER**\n\nReceives raw purchase order events from ERP systems via POST /webhook/erp-event.\n\nSteps:\n1. Normalize raw payload to internal format\n2. Validate all required fields (po_id, supplier_id, component_id, event_type)\n3. POST to /integrations/erp/event → upsert PO, auto-create incident if DELAYED\n4. Route: DELAYED/AT_RISK → trigger Main LLM Agent | others → audit log\n5. Retry: 4 attempts, 2s backoff on 5xx errors\n6. Log ERP action + audit event on every branch\n7. Return structured JSON response with correlation_id",
+        "height": 200,
+        "width": 2400,
+        "color": 2
+      }
+    },
+
+    {
+      "id": "sticky-s2",
+      "name": "⏰ SECTION 2 — DELIVERY MONITORING AGENT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 280],
+      "parameters": {
+        "content": "## ⏰ SECTION 2 — DELIVERY MONITORING AGENT (Scheduled)\n\n**Agent: DELIVERY_MONITORING_AGENT**\n\nScheduled every 5 minutes to detect commitment breaches before they escalate.\n\nSteps:\n1. GET /integrations/purchase-orders/active\n2. Evaluate each PO: date diff (promised vs expected), delay severity\n3. Idempotency via workflow static data (keyed on po_id + breach_date)\n4. For each new breach: POST /integrations/delivery-breach → incident_id\n5. For each incident: POST to Main LLM Agent webhook\n6. Classify severity: >7 days = HIGH, 3–7 days = MEDIUM, <3 days = LOW\n7. ERP log + audit trail for every breach detected",
+        "height": 200,
+        "width": 2200,
+        "color": 3
+      }
+    },
+
+    {
+      "id": "sticky-s3",
+      "name": "🏭 SECTION 3 — SUPPLIER RESPONSE AGENT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 760],
+      "parameters": {
+        "content": "## 🏭 SECTION 3 — SUPPLIER RESPONSE AGENT\n\n**Agent: SUPPLIER_RESPONSE_AGENT**\n\nReceives RFQ responses from supplier systems via POST /webhook/supplier-response.\n\nSteps:\n1. Normalize supplier payload\n2. Validate: rfq_id, supplier_id, component_id, quantity_available, delivery_days, unit_price\n3. POST to /integrations/supplier-response → upsert RFQ record\n4. Evaluate response quality: delivery_days, price vs baseline, expedite availability\n5. If incomplete/rejected → notify Approval Agent + audit log\n6. ERP log + audit trail\n7. Return structured 200 with ranked_options if recovery plan exists",
+        "height": 200,
+        "width": 2000,
+        "color": 4
+      }
+    },
+
+    {
+      "id": "sticky-s4",
+      "name": "🤖 SECTION 4 — MAIN AGENT (Groq LLM Orchestrator)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 1240],
+      "parameters": {
+        "content": "## 🤖 SECTION 4 — MAIN AGENT — Groq LLM Orchestrator\n\n**Agent: MAIN_LLM_AGENT** ← PRIMARY REASONING LAYER\n\nAll LLM logic lives here. Groq LLaMA-3.3-70B (temp=0.1) analyzes incidents and orchestrates specialized agents.\n\nSteps:\n1. Receive incident_id from any upstream trigger\n2. Fetch full context via POST /agent/trigger (inventory, POs, suppliers, anomaly flags)\n3. Build structured prompt: incident + inventory + production orders + suppliers + anomaly detection rules\n4. Invoke Groq: detect inconsistencies, classify issue type, determine routing\n5. Parse JSON decision: decision, routing_target, recommended_action, reasoning, estimated_impact\n6. Route: APPROVE_AUTONOMOUS → /agent/approve | NEEDS_HUMAN_APPROVAL → Approval Agent | DATA_INCONSISTENCY → Error Handler\n7. ERP log + audit trail + structured 200 response",
+        "height": 220,
+        "width": 2800,
+        "color": 1
+      }
+    },
+
+    {
+      "id": "sticky-s5",
+      "name": "✅ SECTION 5 — APPROVAL AGENT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 1840],
+      "parameters": {
+        "content": "## ✅ SECTION 5 — APPROVAL AGENT\n\n**Agent: HUMAN_APPROVAL_AGENT**\n\nOrchestrates human approval flow for high-cost recovery plans (>$50,000).\n\nSteps:\n1. POST /webhook/approval-required → format email with approve/reject links\n2. Send approval email via SMTP\n3. GET /webhook/approval-decision/:decision → parse decision (approve/reject)\n4. Approved: POST /agent/approve → ERP log → audit\n5. Rejected: POST /agent/reject → trigger re-planning via Main Agent → audit\n6. Timeout handling: if no decision after 24h → escalate to ops team\n7. HTML confirmation response to approver",
+        "height": 200,
+        "width": 1800,
+        "color": 5
+      }
+    },
+
+    {
+      "id": "sticky-s6",
+      "name": "🔔 SECTION 6 — NOTIFICATION AGENT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 2320],
+      "parameters": {
+        "content": "## 🔔 SECTION 6 — NOTIFICATION AGENT\n\n**Agent: NOTIFICATION_AGENT**\n\nHandles all outbound notifications to teams and stakeholders.\n\nSteps:\n1. POST /webhook/notify → classify by notification_type and urgency\n2. CRITICAL/HIGH: send email immediately\n3. MEDIUM: log + email with 1h digest\n4. LOW: log only\n5. Notification status persisted to audit trail\n6. ERP log with notification reference",
+        "height": 180,
+        "width": 1400,
+        "color": 6
+      }
+    },
+
+    {
+      "id": "sticky-s7",
+      "name": "⚙️ SECTION 7 — INTEGRATION/API AGENT",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 2700],
+      "parameters": {
+        "content": "## ⚙️ SECTION 7 — INTEGRATION/API AGENT\n\n**Agent: INTEGRATION_API_AGENT**\n\nGeneric retry-capable API execution agent for external system calls.\n\nSteps:\n1. POST /webhook/api-call → validate payload (url, method, body)\n2. Execute HTTP call to target API\n3. On 5xx: retry up to 3 times, 2s exponential backoff\n4. On 4xx: classify (401=auth, 400=validation, 404=not_found) → no retry\n5. On permanent failure: route to Retry & Error Handler\n6. ERP log + audit for every attempt\n7. Return result with attempt_count and final_status",
+        "height": 180,
+        "width": 1600,
+        "color": 7
+      }
+    },
+
+    {
+      "id": "sticky-s8",
+      "name": "🔁 SECTION 8 — RETRY & ERROR HANDLER",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 3080],
+      "parameters": {
+        "content": "## 🔁 SECTION 8 — RETRY & ERROR HANDLER\n\n**Agent: RETRY_ERROR_HANDLER**\n\nGlobal error handler triggered by n8n error trigger + manual escalation from any section.\n\nSteps:\n1. Classify error: HTTP_5XX (transient), HTTP_4XX (permanent), AUTH_FAILURE, LLM_TIMEOUT, VALIDATION_FAILURE\n2. Transient: retry with exponential backoff (max 3 attempts)\n3. AUTH_FAILURE: notify ops immediately, do not retry\n4. Permanent failure: escalate → Notification Agent → ops email\n5. Record integration_error in MongoDB\n6. ERP error log\n7. Audit trail with error_details, retry_count, resolution_status",
+        "height": 180,
+        "width": 1800,
+        "color": 6
+      }
+    },
+
+    {
+      "id": "sticky-s9",
+      "name": "📋 SECTION 9 — AUDIT TRAIL LOGGER",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 3460],
+      "parameters": {
+        "content": "## 📋 SECTION 9 — AUDIT TRAIL LOGGER\n\n**Agent: AUDIT_TRAIL_LOGGER**\n\nShared audit + ERP logging nodes called from all sections.\n\nEvery audit entry contains:\n- event_id, correlation_id, timestamp, source, workflow\n- event_type, entity_type, entity_id, incident_id\n- action, status, decision, reason\n- retry_count, error_details, notification_status\n- ERP log ref\n\nPersists to MongoDB via POST /integrations/audit\nERP actions logged via POST /integrations/erp/log",
+        "height": 200,
+        "width": 1200,
+        "color": 7
+      }
+    },
+
+    {
+      "id": "sticky-s10",
+      "name": "📊 SECTION 10 — REPORT GENERATOR",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-100, 3860],
+      "parameters": {
+        "content": "## 📊 SECTION 10 — REPORT GENERATOR\n\n**Agent: REPORT_GENERATOR_AGENT**\n\nOn-demand audit trail report generation in CSV and PDF formats.\n\nSteps:\n1. POST /webhook/generate-report → parse params (format, incident_id, date_range)\n2. GET /integrations/audit/report/csv → stream CSV\n3. GET /integrations/audit/report/pdf → stream PDF\n4. Return report metadata with download URLs\n5. Audit log the report generation event",
+        "height": 180,
+        "width": 1400,
+        "color": 2
+      }
+    },
+
+    {
+      "id": "erp-webhook",
+      "name": "📦 [ERP RECEIVER] Webhook — POST /webhook/erp-event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "erp-event",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "notes": "AGENT: ERP_EVENT_RECEIVER\nEntry point for all ERP purchase order events.\nExpects: { event_id, event_type, timestamp, purchase_order: { po_id, supplier_id, component_id, quantity, unit_price, status, promised_delivery } }",
+      "webhookId": "68ad0951-8405-41b4-9f3e-fa63f6ab8b88"
+    },
+    {
+      "id": "erp-normalize",
+      "name": "📦 [ERP RECEIVER] Normalize ERP Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "notes": "AGENT: ERP_EVENT_RECEIVER\nNormalizes raw ERP payload to internal format.\nGenerates correlation_id for end-to-end tracing.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ============================================================\n// NORMALIZE ERP PAYLOAD → internal format\n// Generates correlation_id for end-to-end tracing\n// ============================================================\nconst raw = $json.body || $json;\nconst po = raw.purchase_order || raw;\nconst correlationId = 'CORR-ERP-' + Date.now();\n\nreturn [{ json: {\n  correlation_id: correlationId,\n  event_id: raw.event_id || 'EVT-' + Date.now(),\n  event_type: raw.event_type || 'STATUS_UPDATE',\n  timestamp: raw.timestamp || new Date().toISOString(),\n  source: raw.source || 'erp_system',\n  po_id: po.po_id || null,\n  supplier_id: po.supplier_id || null,\n  component_id: po.component_id || null,\n  quantity: po.quantity != null ? Number(po.quantity) : null,\n  unit_price: po.unit_price != null ? Number(po.unit_price) : null,\n  expected_delivery: po.promised_delivery || po.expected_delivery || null,\n  status: (po.status || '').toUpperCase(),\n  notes: po.notes || ''\n}}];\n"
+      }
+    },
+    {
+      "id": "erp-validate",
+      "name": "📦 [ERP RECEIVER] Validate Required Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0],
+      "notes": "AGENT: ERP_EVENT_RECEIVER\nValidates all required fields. Missing fields trigger a 400 response and audit log.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ============================================================\n// VALIDATE required fields\n// ============================================================\nconst d = $json;\nconst required = { po_id: d.po_id, supplier_id: d.supplier_id, component_id: d.component_id, event_type: d.event_type };\nconst missing = Object.entries(required).filter(([k,v]) => !v).map(([k]) => k);\nconst validStatuses = ['OPEN','ORDERED','IN_TRANSIT','AT_RISK','DELAYED','RECEIVED','CANCELLED'];\nconst unknownStatus = d.status && !validStatuses.includes(d.status);\n\nreturn [{ json: {\n  ...d,\n  is_valid: missing.length === 0,\n  missing_fields: missing,\n  unknown_status: unknownStatus,\n  needs_agent: ['DELAYED', 'AT_RISK'].includes(d.status)\n}}];\n"
+      }
+    },
+    {
+      "id": "erp-if-valid",
+      "name": "📦 [ERP RECEIVER] IF Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [720, 0],
+      "notes": "Route: valid → sync backend | invalid → 400 + error audit",
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{ "id": "c1", "leftValue": "={{ $json.is_valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "erp-sync",
+      "name": "📦 [ERP RECEIVER] POST /integrations/erp/event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, -100],
+      "notes": "AGENT: ERP_EVENT_RECEIVER\nSyncs normalized PO event to backend MongoDB.\nReturns: { success, po_id, incident_id, agent_trigger_required }",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/event",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { event_id: $json.event_id, event_type: $json.event_type, timestamp: $json.timestamp, po_id: $json.po_id, supplier_id: $json.supplier_id, component_id: $json.component_id, quantity: $json.quantity, unit_price: $json.unit_price, expected_delivery: $json.expected_delivery, status: $json.status, source: $json.source } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "erp-if-trigger",
+      "name": "📦 [ERP RECEIVER] IF Agent Trigger Required",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1200, -100],
+      "notes": "DELAYED or AT_RISK POs trigger the Main LLM Agent.",
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{ "id": "c2", "leftValue": "={{ $json.agent_trigger_required }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "erp-call-agent",
+      "name": "📦 [ERP RECEIVER] POST /webhook/agent/analyze-incident",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, -200],
+      "notes": "Triggers the Main LLM Agent with the new incident_id.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/agent/analyze-incident",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: $json.incident_id, correlation_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.correlation_id, source: 'erp_event' } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "erp-erp-log-triggered",
+      "name": "📦 [ERP RECEIVER] POST /integrations/erp/log — Agent Triggered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, -200],
+      "notes": "ERP log: records that n8n triggered the LLM agent for this PO.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'AGENT_TRIGGERED', entity_type: 'INCIDENT', entity_id: $('[📦 [ERP RECEIVER] POST /integrations/erp/event]').item.json.incident_id, incident_id: $('[📦 [ERP RECEIVER] POST /integrations/erp/event]').item.json.incident_id, performed_by: 'n8n:ERP_EVENT_RECEIVER', details: { po_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.po_id, status: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.status }, status: 'SUCCESS', correlation_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "erp-audit-triggered",
+      "name": "📦 [ERP RECEIVER] Build Audit — Agent Triggered",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1960, -200],
+      "notes": "Builds canonical audit event for the ERP DELAYED → Agent trigger.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const norm = $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json;\nconst sync = $('[📦 [ERP RECEIVER] POST /integrations/erp/event]').item.json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'ERP_EVENT_SYNC',\n  event_type: 'AGENT_TRIGGERED',\n  incident_id: sync.incident_id || null,\n  entity_type: 'PURCHASE_ORDER',\n  entity_id: norm.po_id,\n  action: 'TRIGGER_LLM_AGENT',\n  status: 'SUCCESS',\n  decision: 'AGENT_TRIGGERED',\n  reason: 'PO status is ' + norm.status + ' — Groq LLM agent invoked',\n  correlation_id: norm.correlation_id,\n  retry_count: 0,\n  input: { status: norm.status, event_type: norm.event_type },\n  output: { incident_id: sync.incident_id }\n}}];\n"
+      }
+    },
+    {
+      "id": "erp-log-audit-triggered",
+      "name": "📦 [ERP RECEIVER] POST /integrations/audit — Triggered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, -200],
+      "notes": "Persists audit event to MongoDB Atlas audit_logs.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "erp-respond-triggered",
+      "name": "📦 [ERP RECEIVER] Respond 200 — Synced + Agent Triggered",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2440, -200],
+      "notes": "Final response: confirms sync and agent trigger.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, status: 'PROCESSING', event_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.event_id, correlation_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.correlation_id, po_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.po_id, incident_id: $('[📦 [ERP RECEIVER] POST /integrations/erp/event]').item.json.incident_id, backend_synced: true, agent_triggered: true, message: 'PO synced and LLM agent invoked for incident analysis' } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "erp-erp-log-synced",
+      "name": "📦 [ERP RECEIVER] POST /integrations/erp/log — Synced",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 0],
+      "notes": "ERP log: records PO sync (no agent needed).",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'PO_SYNCED', entity_type: 'PURCHASE_ORDER', entity_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.po_id, performed_by: 'n8n:ERP_EVENT_RECEIVER', details: { status: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.status }, status: 'SUCCESS', correlation_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "erp-audit-synced",
+      "name": "📦 [ERP RECEIVER] Build Audit — Synced No Trigger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1700, 0],
+      "notes": "Builds audit event for non-triggering ERP sync.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const norm = $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json;\nconst sync = $('[📦 [ERP RECEIVER] POST /integrations/erp/event]').item.json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'ERP_EVENT_SYNC',\n  event_type: 'ERP_SYNC_COMPLETED',\n  incident_id: null,\n  entity_type: 'PURCHASE_ORDER',\n  entity_id: norm.po_id,\n  action: 'SYNC_ERP_EVENT',\n  status: 'SUCCESS',\n  decision: 'ERP_SYNC_COMPLETED',\n  reason: 'PO status ' + norm.status + ' does not require agent action',\n  correlation_id: norm.correlation_id,\n  retry_count: 0,\n  input: { status: norm.status },\n  output: sync\n}}];\n"
+      }
+    },
+    {
+      "id": "erp-log-audit-synced",
+      "name": "📦 [ERP RECEIVER] POST /integrations/audit — Synced",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 0],
+      "notes": "Persists audit event for non-triggering sync.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "erp-respond-synced",
+      "name": "📦 [ERP RECEIVER] Respond 200 — Synced",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2200, 0],
+      "notes": "Final response for non-triggering ERP events.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, status: 'COMPLETED', event_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.event_id, correlation_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.correlation_id, po_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.po_id, backend_synced: true, agent_triggered: false, message: 'ERP event synced successfully. No agent action required for status ' + $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.status } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "erp-invalid-audit",
+      "name": "📦 [ERP RECEIVER] Build Audit — Validation Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 120],
+      "notes": "Builds error audit event for invalid ERP payload.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'ERP_EVENT_SYNC',\n  event_type: 'WORKFLOW_FAILED',\n  incident_id: null,\n  entity_type: 'ERP_EVENT',\n  entity_id: d.event_id || 'UNKNOWN',\n  action: 'VALIDATE_ERP_EVENT',\n  status: 'FAILURE',\n  decision: 'VALIDATION_FAILED',\n  reason: 'Missing required fields: ' + (d.missing_fields || []).join(', '),\n  correlation_id: d.correlation_id,\n  retry_count: 0,\n  error_details: 'ValidationError: ' + JSON.stringify(d.missing_fields),\n  input: d,\n  output: { missing_fields: d.missing_fields }\n}}];\n"
+      }
+    },
+    {
+      "id": "erp-invalid-log",
+      "name": "📦 [ERP RECEIVER] POST /integrations/audit — Validation Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 120],
+      "notes": "Persists validation failure to audit trail.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "erp-respond-400",
+      "name": "📦 [ERP RECEIVER] Respond 400 — Invalid Payload",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 120],
+      "notes": "Returns structured 400 with error details.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, status: 'REJECTED', event_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.event_id, correlation_id: $('[📦 [ERP RECEIVER] Normalize ERP Payload]').item.json.correlation_id, error: 'VALIDATION_FAILURE', message: 'Required fields missing', missing_fields: $('[📦 [ERP RECEIVER] Validate Required Fields]').item.json.missing_fields } }}",
+        "options": { "responseCode": 400 }
+      }
+    },
+
+    {
+      "id": "mon-schedule",
+      "name": "⏰ [MONITOR] Schedule — Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 480],
+      "notes": "AGENT: DELIVERY_MONITORING_AGENT\nRuns every 5 minutes to detect delivery commitment breaches.",
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 5 }] } }
+    },
+    {
+      "id": "mon-get-pos",
+      "name": "⏰ [MONITOR] GET /integrations/purchase-orders/active",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 480],
+      "notes": "Fetches all active POs for delivery breach evaluation.",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.BACKEND_URL }}/integrations/purchase-orders/active",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" }]},
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "mon-if-active",
+      "name": "⏰ [MONITOR] IF Active POs Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 480],
+      "notes": "EARLY EXIT: If the backend returns an empty array (no active POs),\nstop execution immediately. Prevents the evaluate/idempotency nodes\nfrom processing null/empty items and causing downstream errors.",
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{
+            "id": "mon-c1",
+            "leftValue": "={{ $input.all().length }}",
+            "rightValue": 0,
+            "operator": { "type": "number", "operation": "gt" }
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "mon-evaluate",
+      "name": "⏰ [MONITOR] Evaluate Delivery Commitments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 480],
+      "notes": "AGENT: DELIVERY_MONITORING_AGENT\nEvaluates each PO for delivery breach.\nClassifies severity: HIGH >7d, MEDIUM 3-7d, LOW <3d",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ============================================================\n// EVALUATE DELIVERY COMMITMENTS\n// ============================================================\nconst items = $input.all();\nconst today = new Date();\nconst out = [];\n\nfor (const item of items) {\n  const po = item.json;\n  if (!po.po_id || !po.promised_delivery) continue;\n\n  const promised = new Date(po.promised_delivery);\n  const expected = new Date(po.current_expected_delivery || po.promised_delivery);\n  const diffDays = Math.round((expected - promised) / 86400000);\n  const daysPastPromised = Math.round((today - promised) / 86400000);\n\n  let status = 'ON_TRACK';\n  if (['RECEIVED','DELIVERED','COMPLETED'].includes(po.status)) status = 'DELIVERED';\n  else if (po.status === 'CANCELLED') status = 'CANCELLED';\n  else if (diffDays > 0 && expected < today) status = 'BREACHED';\n  else if (diffDays > 0 || (daysPastPromised > 0 && po.status === 'IN_TRANSIT')) status = 'AT_RISK';\n\n  const severity = diffDays > 7 ? 'HIGH' : diffDays >= 3 ? 'MEDIUM' : 'LOW';\n  const breachDateKey = (status === 'BREACHED' ? expected : today).toISOString().slice(0, 10);\n  const idempotencyKey = po.po_id + '_' + severity + '_' + breachDateKey;\n  const correlationId = 'CORR-MON-' + Date.now() + '-' + po.po_id;\n\n  out.push({ json: {\n    po_id: po.po_id,\n    supplier_id: po.supplier_id,\n    component_id: po.component_id,\n    promised_date: po.promised_delivery,\n    current_expected_date: po.current_expected_delivery || po.promised_delivery,\n    delay_days: Math.max(diffDays, 0),\n    days_past_promised: Math.max(daysPastPromised, 0),\n    commitment_status: status,\n    severity,\n    idempotency_key: idempotencyKey,\n    correlation_id: correlationId\n  }});\n}\n\nreturn out.filter(i => i.json.commitment_status === 'BREACHED');\n"
+      }
+    },
+    {
+      "id": "mon-idempotency",
+      "name": "⏰ [MONITOR] Idempotency Check — Deduplicate Breaches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 480],
+      "notes": "Prevents duplicate breach incidents using workflow static data.\nExpires entries after 7 days.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const sd = $getWorkflowStaticData('global');\nif (!sd.processedBreaches) sd.processedBreaches = {};\nconst items = $input.all();\nconst fresh = [];\nconst now = Date.now();\n// Prune keys older than 7 days\nfor (const [k, ts] of Object.entries(sd.processedBreaches)) {\n  if (now - ts > 7 * 86400000) delete sd.processedBreaches[k];\n}\nfor (const item of items) {\n  const key = item.json.idempotency_key;\n  if (!sd.processedBreaches[key]) {\n    sd.processedBreaches[key] = now;\n    fresh.push(item);\n  }\n}\nreturn fresh;\n"
+      }
+    },
+    {
+      "id": "mon-send-breach",
+      "name": "⏰ [MONITOR] POST /integrations/delivery-breach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 480],
+      "notes": "Creates DELIVERY_BREACH incident in backend MongoDB.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/delivery-breach",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { event_type: 'DELIVERY_COMMITMENT_BREACH', po_id: $json.po_id, supplier_id: $json.supplier_id, component_id: $json.component_id, promised_date: $json.promised_date, current_expected_date: $json.current_expected_date, delay_days: $json.delay_days } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "mon-call-agent",
+      "name": "⏰ [MONITOR] POST /webhook/agent/analyze-incident",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 480],
+      "notes": "Triggers Main LLM Agent for each new delivery breach.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/agent/analyze-incident",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: $json.incident_id, correlation_id: $('[⏰ [MONITOR] Evaluate Delivery Commitments]').item.json.correlation_id, source: 'delivery_monitor', severity: $('[⏰ [MONITOR] Evaluate Delivery Commitments]').item.json.severity } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "mon-erp-log",
+      "name": "⏰ [MONITOR] POST /integrations/erp/log — Breach Detected",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 480],
+      "notes": "ERP log: records delivery breach detection.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'DELIVERY_BREACH_DETECTED', entity_type: 'PURCHASE_ORDER', entity_id: $('[⏰ [MONITOR] Idempotency Check — Deduplicate Breaches]').item.json.po_id, incident_id: $('[⏰ [MONITOR] POST /integrations/delivery-breach]').item.json.incident_id, performed_by: 'n8n:DELIVERY_MONITORING_AGENT', details: { delay_days: $('[⏰ [MONITOR] Evaluate Delivery Commitments]').item.json.delay_days, severity: $('[⏰ [MONITOR] Evaluate Delivery Commitments]').item.json.severity }, status: 'SUCCESS', correlation_id: $('[⏰ [MONITOR] Evaluate Delivery Commitments]').item.json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "mon-audit",
+      "name": "⏰ [MONITOR] Build Audit — Delivery Breach",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1680, 480],
+      "notes": "Builds canonical audit event for delivery breach.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const breach = $('[⏰ [MONITOR] Idempotency Check — Deduplicate Breaches]').item.json;\nconst incResp = $('[⏰ [MONITOR] POST /integrations/delivery-breach]').item.json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'DELIVERY_COMMITMENT_MONITOR',\n  event_type: 'DELIVERY_COMMITMENT_BREACH',\n  incident_id: incResp.incident_id || null,\n  entity_type: 'PURCHASE_ORDER',\n  entity_id: breach.po_id,\n  action: 'TRIGGER_LLM_AGENT',\n  status: 'SUCCESS',\n  decision: 'DELIVERY_COMMITMENT_BREACH',\n  reason: 'Delivery delayed by ' + breach.delay_days + ' days. Severity: ' + breach.severity,\n  correlation_id: breach.correlation_id,\n  retry_count: 0,\n  input: { delay_days: breach.delay_days, severity: breach.severity },\n  output: { incident_id: incResp.incident_id, agent_triggered: true }\n}}];\n"
+      }
+    },
+    {
+      "id": "mon-log-audit",
+      "name": "⏰ [MONITOR] POST /integrations/audit — Breach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1920, 480],
+      "notes": "Persists breach audit event to MongoDB.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+
+    {
+      "id": "sup-webhook",
+      "name": "🏭 [SUPPLIER] Webhook — POST /webhook/supplier-response",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 960],
+      "notes": "AGENT: SUPPLIER_RESPONSE_AGENT\nEntry point for supplier RFQ responses.",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "supplier-response",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "715a2c08-bb71-4fc0-8b0e-bafa3427323c"
+    },
+    {
+      "id": "sup-normalize",
+      "name": "🏭 [SUPPLIER] Normalize Supplier Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 960],
+      "notes": "Normalizes raw supplier payload to internal format.\nGenerates correlation_id.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const b = $json.body || $json;\nreturn [{ json: {\n  correlation_id: 'CORR-SUP-' + Date.now(),\n  rfq_id: b.rfq_id || null,\n  supplier_id: b.supplier_id || null,\n  component_id: b.component_id || null,\n  quantity: b.quantity_available != null ? Number(b.quantity_available) : (b.quantity != null ? Number(b.quantity) : null),\n  unit_price: b.unit_price != null ? Number(b.unit_price) : null,\n  delivery_days: b.delivery_days != null ? Number(b.delivery_days) : null,\n  total_cost: b.total_cost != null ? Number(b.total_cost) : (b.unit_price && b.quantity_available ? b.unit_price * b.quantity_available : null),\n  expedite_available: b.expedite_available != null ? Boolean(b.expedite_available) : false,\n  expedite_fee: b.expedite_fee != null ? Number(b.expedite_fee) : null,\n  accepted: b.accepted != null ? b.accepted : null,\n  timestamp: b.timestamp || new Date().toISOString()\n}}];\n"
+      }
+    },
+    {
+      "id": "sup-validate",
+      "name": "🏭 [SUPPLIER] Validate Supplier Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 960],
+      "notes": "Validates required fields and response quality.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $json;\nconst required = { rfq_id: d.rfq_id, supplier_id: d.supplier_id, component_id: d.component_id, quantity: d.quantity, unit_price: d.unit_price, delivery_days: d.delivery_days };\nconst missing = Object.entries(required).filter(([k,v]) => v == null || v === '').map(([k]) => k);\nconst isValid = missing.length === 0;\nconst isPartial = missing.length > 0 && missing.length < 4;\nreturn [{ json: {\n  ...d,\n  is_valid: isValid,\n  is_partial: isPartial,\n  missing_fields: missing\n}}];\n"
+      }
+    },
+    {
+      "id": "sup-if-valid",
+      "name": "🏭 [SUPPLIER] IF Valid Response",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [720, 960],
+      "notes": "Valid → sync backend | Invalid → error audit + 400",
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{ "id": "c3", "leftValue": "={{ $json.is_valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "sup-sync",
+      "name": "🏭 [SUPPLIER] POST /integrations/supplier-response",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 880],
+      "notes": "Syncs validated RFQ response to backend MongoDB.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/supplier-response",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "sup-erp-log",
+      "name": "🏭 [SUPPLIER] POST /integrations/erp/log — Response Received",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 880],
+      "notes": "ERP log: records supplier response receipt.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'SUPPLIER_RESPONSE_RECEIVED', entity_type: 'RFQ', entity_id: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.rfq_id, performed_by: 'n8n:SUPPLIER_RESPONSE_AGENT', details: { supplier_id: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.supplier_id, delivery_days: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.delivery_days, unit_price: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.unit_price }, status: 'SUCCESS', correlation_id: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "sup-audit-ok",
+      "name": "🏭 [SUPPLIER] Build Audit — Response OK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 880],
+      "notes": "Builds canonical audit event for successful supplier response.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const norm = $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json;\nconst sync = $json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'SUPPLIER_RESPONSE_SYNC',\n  event_type: 'SUPPLIER_RESPONSE_RECEIVED',\n  incident_id: sync.incident_id || null,\n  entity_type: 'RFQ',\n  entity_id: norm.rfq_id,\n  action: 'SYNC_SUPPLIER_RESPONSE',\n  status: 'SUCCESS',\n  decision: 'SUPPLIER_RESPONSE_RECEIVED',\n  reason: 'Supplier ' + norm.supplier_id + ' responded: ' + norm.delivery_days + ' days, $' + norm.unit_price + '/unit',\n  correlation_id: norm.correlation_id,\n  retry_count: 0,\n  input: { supplier_id: norm.supplier_id, delivery_days: norm.delivery_days },\n  output: sync\n}}];\n"
+      }
+    },
+    {
+      "id": "sup-log-audit-ok",
+      "name": "🏭 [SUPPLIER] POST /integrations/audit — Response OK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1680, 880],
+      "notes": "Persists supplier response audit event.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "sup-respond-200",
+      "name": "🏭 [SUPPLIER] Respond 200 — Synced",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1920, 880],
+      "notes": "Returns 200 with ranked options if a recovery plan exists.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, status: 'COMPLETED', rfq_id: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.rfq_id, correlation_id: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.correlation_id, backend_synced: true, ranked_options: $('[🏭 [SUPPLIER] POST /integrations/supplier-response]').item.json.options || [], message: 'Supplier response synced successfully' } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "sup-audit-fail",
+      "name": "🏭 [SUPPLIER] Build Audit — Validation Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 1060],
+      "notes": "Builds error audit event for invalid supplier response.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'SUPPLIER_RESPONSE_SYNC',\n  event_type: 'WORKFLOW_FAILED',\n  incident_id: null,\n  entity_type: 'RFQ',\n  entity_id: d.rfq_id || 'UNKNOWN',\n  action: 'VALIDATE_SUPPLIER_RESPONSE',\n  status: 'FAILURE',\n  decision: 'VALIDATION_FAILED',\n  reason: 'Missing fields: ' + (d.missing_fields || []).join(', '),\n  correlation_id: d.correlation_id,\n  retry_count: 0,\n  error_details: 'Required fields missing: ' + JSON.stringify(d.missing_fields),\n  input: d,\n  output: { missing_fields: d.missing_fields }\n}}];\n"
+      }
+    },
+    {
+      "id": "sup-log-audit-fail",
+      "name": "🏭 [SUPPLIER] POST /integrations/audit — Validation Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 1060],
+      "notes": "Persists validation failure audit event.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "sup-respond-400",
+      "name": "🏭 [SUPPLIER] Respond 400 — Invalid Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 1060],
+      "notes": "Returns structured 400 with missing fields.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, status: 'REJECTED', rfq_id: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.rfq_id, correlation_id: $('[🏭 [SUPPLIER] Normalize Supplier Payload]').item.json.correlation_id, error: 'VALIDATION_FAILURE', missing_fields: $('[🏭 [SUPPLIER] Validate Supplier Response]').item.json.missing_fields, message: 'Supplier response missing required fields. Please resubmit.' } }}",
+        "options": { "responseCode": 400 }
+      }
+    },
+
+    {
+      "id": "agent-fetch-config",
+      "name": "🤖 [MAIN AGENT] GET /api/v1/config/n8n — Fetch Backend Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 1440],
+      "notes": "DYNAMIC CONFIG: Fetches all runtime configuration from the backend once\nper incident lifecycle. Eliminates hard-coded $env references from downstream nodes.\nReturns: { notify_from_email, approval_notify_email, ops_alert_email,\n           autonomous_approval_limit_usd, backend_url, llm_config }",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.BACKEND_URL }}/api/v1/config/n8n",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Accept", "value": "application/json" }
+        ]},
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-webhook",
+      "name": "🤖 [MAIN AGENT] Webhook — POST /webhook/agent/analyze-incident",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 1440],
+      "notes": "AGENT: MAIN_LLM_AGENT\nEntry point for incident analysis. Called by ERP Receiver, Delivery Monitor, and Approval Agent.\nExpects: { incident_id, correlation_id?, source? }",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agent/analyze-incident",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    },
+    {
+      "id": "agent-fetch-ctx",
+      "name": "🤖 [MAIN AGENT] POST /agent/trigger — Fetch Incident Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 1440],
+      "notes": "Fetches full incident context from backend:\n- Incident details\n- Inventory for affected component\n- Active production orders\n- Supplier profiles",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/agent/trigger",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: ($json.body || $json).incident_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-build-prompt",
+      "name": "🤖 [MAIN AGENT] Build LLM Prompt with Anomaly Detection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 1440],
+      "notes": "AGENT: MAIN_LLM_AGENT\nBuilds comprehensive prompt including:\n- Incident details\n- Inventory state\n- Production risk\n- Supplier profiles\n- Anomaly detection checklist\n- Routing instructions",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ctx = $json;\nconst inbound = $('[🤖 [MAIN AGENT] Webhook — POST /webhook/agent/analyze-incident]').item.json;\nconst raw = inbound.body || inbound;\nconst incident = ctx.incident || {};\nconst context = ctx.context || {};\nconst inv = context.inventory || {};\nconst pos = (context.production_orders || []).map(p =>\n  `  - ${p.production_id}: qty=${p.quantity}, need=${p.components_needed}, deadline=${p.deadline}, priority=${p.priority}, status=${p.status}`\n).join('\\n') || '  None';\nconst sups = (context.suppliers || []).map(s =>\n  `  - ${s.supplier_id}: ${s.name}, reliability=${s.reliability_score}, quality=${s.quality_score}, lead_time=${s.lead_time_days}d, blacklisted=${s.blacklisted}, status=${s.status}`\n).join('\\n') || '  None';\n\nconst prompt = `You are the Supply Chain Disruption Control Agent — the primary AI orchestrator for the supply chain resilience system.\n\nYour job:\n1. Analyze the incident using all context provided.\n2. Detect any data inconsistencies, anomalies, or conflicts.\n3. Classify the issue and determine the appropriate recovery action.\n4. Output a structured JSON decision.\n\n===== INCIDENT =====\n- ID: ${incident.incident_id}\n- Type: ${incident.type}\n- Severity: ${incident.severity}\n- Affected Component: ${incident.affected_component}\n- Affected PO: ${incident.affected_po}\n- Supplier: ${incident.supplier_id}\n- Status: ${incident.status}\n- Delay Days: ${incident.delay_days || 0}\n- Source: ${incident.source}\n\n===== INVENTORY (Component: ${context.component_id}) =====\n- Current Stock: ${inv.current_stock ?? 'MISSING'}\n- Usable Stock: ${inv.usable_stock ?? 'MISSING'}\n- Daily Usage: ${inv.daily_usage ?? 'MISSING'}\n- Safety Stock: ${inv.safety_stock ?? 'MISSING'}\n- Days of Supply: ${inv.days_of_supply ?? 'CALCULATED NEEDED'}\n\n===== ACTIVE PRODUCTION ORDERS =====\n${pos}\n\n===== AVAILABLE SUPPLIERS =====\n${sups}\n\n===== ANOMALY DETECTION CHECKLIST =====\nCheck for all of the following:\n- Negative stock values (current_stock < 0 or usable_stock < 0)\n- Usable stock exceeding current stock\n- Zero or null daily_usage with existing stock (orphaned inventory)\n- Supplier with null or missing reliability_score\n- Blacklisted supplier with active open POs\n- PO with no promised_delivery date\n- PO referencing a supplier not in the system\n- Production order referencing a component with no inventory record\n- Production deadline already past but status is ON_TRACK\n- Incident with no affected_component\n- Duplicate incidents for same PO\n\n===== ROUTING RULES =====\n- APPROVE_AUTONOMOUS: Recovery cost <= $${$env.AUTONOMOUS_APPROVAL_LIMIT_USD || 50000} AND low risk AND no anomalies\n- NEEDS_HUMAN_APPROVAL: Recovery cost > $${$env.AUTONOMOUS_APPROVAL_LIMIT_USD || 50000} OR high risk\n- DATA_INCONSISTENCY: Any anomalies detected from checklist above\n- ESCALATE_NO_RESOLUTION: Cannot determine recovery path\n\n===== RESPONSE FORMAT =====\nRespond with ONLY valid JSON (no markdown, no explanation outside JSON):\n{\n  \"decision\": \"APPROVE_AUTONOMOUS\" | \"NEEDS_HUMAN_APPROVAL\" | \"DATA_INCONSISTENCY\" | \"ESCALATE_NO_RESOLUTION\",\n  \"routing_target\": \"EXECUTE_AUTONOMOUS\" | \"APPROVAL_AGENT\" | \"ERROR_HANDLER\" | \"OPS_ESCALATION\",\n  \"incident_type\": \"SUPPLIER_DELAY\" | \"DELIVERY_BREACH\" | \"INVENTORY_CRITICAL\" | \"DATA_INCONSISTENCY\" | \"UNKNOWN\",\n  \"anomalies_detected\": [],\n  \"recommended_action\": \"<concise action description>\",\n  \"reasoning\": \"<2-3 sentence human-readable summary for audit log>\",\n  \"estimated_impact\": \"<impact description>\",\n  \"estimated_cost_usd\": <number or null>,\n  \"requires_approval\": <true|false>\n}`;\n\nreturn [{ json: {\n  incident_id: ctx.incident_id,\n  correlation_id: raw.correlation_id || ('CORR-AGT-' + Date.now()),\n  state: ctx.state,\n  prompt,\n  incident,\n  context\n}}];\n"
+      }
+    },
+    {
+      "id": "agent-groq-llm",
+      "name": "🤖 [MAIN AGENT] Groq LLM — LLaMA-3.3-70B (temp=0.1)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [720, 1600],
+      "notes": "AGENT: MAIN_LLM_AGENT — PRIMARY LLM\nModel: llama-3.3-70b-versatile\nTemperature: 0.1 (deterministic decisions)\nMax tokens: 1500\n\nThis is the ONLY LLM node in the system.\nAll reasoning, anomaly detection, and routing logic flows through here.",
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": { "temperature": 0.1, "maxTokens": 1500 }
+      },
+      "credentials": { "groqApi": { "id": "groq-credential-id", "name": "Groq API" } }
+    },
+    {
+      "id": "agent-groq-chain",
+      "name": "🤖 [MAIN AGENT] Invoke Groq — Incident Reasoning & Routing",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [960, 1440],
+      "notes": "Invokes Groq LLM with the incident context prompt.\nOutputs: decision, routing_target, anomalies_detected, reasoning",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('[🤖 [MAIN AGENT] Build LLM Prompt with Anomaly Detection]').item.json.prompt }}"
+      }
+    },
+    {
+      "id": "agent-parse",
+      "name": "🤖 [MAIN AGENT] Parse Groq Decision + Route",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 1440],
+      "notes": "Parses Groq JSON output.\nFallback: defaults to NEEDS_HUMAN_APPROVAL if parse fails.\nExtract: decision, routing_target, anomalies, reasoning.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const rawText = $json.text || $json.response || '';\nconst promptCtx = $('[🤖 [MAIN AGENT] Build LLM Prompt with Anomaly Detection]').item.json;\nconst incidentId = promptCtx.incident_id;\nconst correlationId = promptCtx.correlation_id;\n\nlet parsed = {\n  decision: 'NEEDS_HUMAN_APPROVAL',\n  routing_target: 'APPROVAL_AGENT',\n  incident_type: 'UNKNOWN',\n  anomalies_detected: [],\n  recommended_action: 'Manual review required — Groq parse error',\n  reasoning: rawText.slice(0, 300),\n  estimated_impact: 'Unknown',\n  estimated_cost_usd: null,\n  requires_approval: true\n};\n\ntry {\n  const match = rawText.match(/\\{[\\s\\S]*?\\}/);\n  if (match) {\n    const candidate = JSON.parse(match[0]);\n    parsed = { ...parsed, ...candidate };\n  }\n} catch(e) {\n  // Keyword fallback\n  if (rawText.toUpperCase().includes('APPROVE_AUTONOMOUS')) parsed.decision = 'APPROVE_AUTONOMOUS';\n  if (rawText.toUpperCase().includes('DATA_INCONSISTENCY')) parsed.decision = 'DATA_INCONSISTENCY';\n}\n\nconst validDecisions = ['APPROVE_AUTONOMOUS','NEEDS_HUMAN_APPROVAL','DATA_INCONSISTENCY','ESCALATE_NO_RESOLUTION'];\nif (!validDecisions.includes(parsed.decision)) parsed.decision = 'NEEDS_HUMAN_APPROVAL';\n\n// Set routing_target based on decision if not set by LLM\nif (!parsed.routing_target || parsed.routing_target === 'APPROVAL_AGENT') {\n  if (parsed.decision === 'APPROVE_AUTONOMOUS') parsed.routing_target = 'EXECUTE_AUTONOMOUS';\n  else if (parsed.decision === 'DATA_INCONSISTENCY') parsed.routing_target = 'ERROR_HANDLER';\n  else if (parsed.decision === 'ESCALATE_NO_RESOLUTION') parsed.routing_target = 'OPS_ESCALATION';\n  else parsed.routing_target = 'APPROVAL_AGENT';\n}\n\nreturn [{ json: {\n  incident_id: incidentId,\n  correlation_id: correlationId,\n  decision: parsed.decision,\n  routing_target: parsed.routing_target,\n  incident_type: parsed.incident_type,\n  anomalies_detected: parsed.anomalies_detected || [],\n  recommended_action: parsed.recommended_action,\n  reasoning: parsed.reasoning,\n  estimated_impact: parsed.estimated_impact,\n  estimated_cost_usd: parsed.estimated_cost_usd,\n  requires_approval: parsed.requires_approval,\n  groq_raw: rawText\n}}];\n"
+      }
+    },
+    {
+      "id": "agent-if-approve",
+      "name": "🤖 [MAIN AGENT] IF Autonomous Approval",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1440, 1440],
+      "notes": "Routes APPROVE_AUTONOMOUS to /agent/approve.\nAll other decisions go to second switch node.",
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{ "id": "c4", "leftValue": "={{ $json.decision }}", "rightValue": "APPROVE_AUTONOMOUS", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "agent-call-approve",
+      "name": "🤖 [MAIN AGENT] POST /agent/approve — Autonomous",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1680, 1360],
+      "notes": "Backend sets incident status to EXECUTING.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/agent/approve",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: $json.incident_id, approver: 'groq-ai-agent' } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-route-other",
+      "name": "🤖 [MAIN AGENT] Switch — Route Non-Autonomous Decisions",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1680, 1520],
+      "notes": "Routes: NEEDS_HUMAN_APPROVAL → Approval Agent\nDATA_INCONSISTENCY → Error Handler\nESCALATE_NO_RESOLUTION → Ops Escalation",
+      "parameters": {
+        "mode": "rules",
+        "options": {},
+        "rules": {
+          "values": [
+            { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" }, "conditions": [{ "id": "sw1", "leftValue": "={{ $json.decision }}", "rightValue": "NEEDS_HUMAN_APPROVAL", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" } },
+            { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" }, "conditions": [{ "id": "sw2", "leftValue": "={{ $json.decision }}", "rightValue": "DATA_INCONSISTENCY", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" } },
+            { "conditions": { "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" }, "conditions": [{ "id": "sw3", "leftValue": "={{ $json.decision }}", "rightValue": "ESCALATE_NO_RESOLUTION", "operator": { "type": "string", "operation": "equals" } }], "combinator": "and" } }
+          ]
+        }
+      }
+    },
+    {
+      "id": "agent-call-reject",
+      "name": "🤖 [MAIN AGENT] POST /agent/reject — Needs Human",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 1500],
+      "notes": "Backend sets incident status to WAITING_APPROVAL.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/agent/reject",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: $json.incident_id, approver: 'groq-ai-agent', reason: 'Recovery cost or risk exceeds autonomous threshold — routed to human approval' } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-send-approval",
+      "name": "🤖 [MAIN AGENT] POST /webhook/approval-required",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 1500],
+      "notes": "Triggers the Approval Agent workflow.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/approval-required",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.incident_id, plan_id: ('PLAN-' + Date.now()), required_action: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.recommended_action, reason: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.reasoning, estimated_cost: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.estimated_cost_usd, risk: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.estimated_impact, currency: 'USD', correlation_id: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-send-notify-inconsistency",
+      "name": "🤖 [MAIN AGENT] POST /webhook/notify — Data Inconsistency",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 1620],
+      "notes": "Notifies ops team of data inconsistency detected by LLM.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/notify",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { notification_type: 'DATA_INCONSISTENCY', urgency: 'HIGH', incident_id: $json.incident_id, anomalies: $json.anomalies_detected, message: 'LLM detected data inconsistencies: ' + JSON.stringify($json.anomalies_detected), correlation_id: $json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-send-notify-escalate",
+      "name": "🤖 [MAIN AGENT] POST /webhook/notify — Escalation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, 1720],
+      "notes": "Notifies ops team when no resolution path found.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/notify",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { notification_type: 'ESCALATION', urgency: 'CRITICAL', incident_id: $json.incident_id, message: 'No automated resolution path: ' + $json.reasoning, correlation_id: $json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-merge",
+      "name": "🤖 [MAIN AGENT] Merge All Decision Branches",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2440, 1440],
+      "notes": "Merges all 4 decision branches (approve, human, inconsistency, escalate) for audit logging.",
+      "parameters": { "mode": "passThrough", "output": "input1" }
+    },
+    {
+      "id": "agent-erp-log",
+      "name": "🤖 [MAIN AGENT] POST /integrations/erp/log — Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2680, 1440],
+      "notes": "ERP log: records LLM decision and routing.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'LLM_DECISION_MADE', entity_type: 'INCIDENT', entity_id: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.incident_id, incident_id: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.incident_id, performed_by: 'n8n:GROQ_LLM_AGENT', details: { decision: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.decision, routing_target: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.routing_target, anomalies: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.anomalies_detected }, status: 'SUCCESS', correlation_id: $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "agent-build-audit",
+      "name": "🤖 [MAIN AGENT] Build Audit — LLM Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2920, 1440],
+      "notes": "Builds canonical audit event capturing the complete LLM reasoning result.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const dec = $('[🤖 [MAIN AGENT] Parse Groq Decision + Route]').item.json;\nconst eventTypeMap = {\n  'APPROVE_AUTONOMOUS': 'AUTONOMOUS_APPROVAL',\n  'NEEDS_HUMAN_APPROVAL': 'HUMAN_APPROVAL_REQUIRED',\n  'DATA_INCONSISTENCY': 'DATA_INCONSISTENCY_DETECTED',\n  'ESCALATE_NO_RESOLUTION': 'ESCALATION_REQUIRED'\n};\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'GROQ_AI_AGENT',\n  event_type: eventTypeMap[dec.decision] || dec.decision,\n  incident_id: dec.incident_id,\n  entity_type: 'INCIDENT',\n  entity_id: dec.incident_id,\n  action: 'GROQ_REASONING_COMPLETE',\n  status: 'SUCCESS',\n  decision: dec.decision,\n  reason: dec.reasoning,\n  correlation_id: dec.correlation_id,\n  retry_count: 0,\n  input: { incident_id: dec.incident_id },\n  output: {\n    decision: dec.decision,\n    routing_target: dec.routing_target,\n    incident_type: dec.incident_type,\n    anomalies_detected: dec.anomalies_detected,\n    recommended_action: dec.recommended_action,\n    estimated_impact: dec.estimated_impact,\n    estimated_cost_usd: dec.estimated_cost_usd\n  }\n}}];\n"
+      }
+    },
+    {
+      "id": "agent-log-audit",
+      "name": "🤖 [MAIN AGENT] POST /integrations/audit — LLM Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3160, 1440],
+      "notes": "Persists LLM decision audit event to MongoDB Atlas.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "agent-post-analysis-prompt",
+      "name": "🤖 [MAIN AGENT] Build Groq Post-Analysis Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 1440],
+      "notes": "POST-ANALYSIS STAGE: Constructs a structured prompt from the primary Groq decision,\ninput context, and financial impact. Passed to the Post-Analysis LLM for deep\nrecovery action planning.\n\nOutputs strict JSON:\n{\n  action_summary, logistics_reroute, expedite_recommended,\n  estimated_recovery_hours, risk_mitigation_steps[]\n}",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const dec = $json;\nconst ctx = $('[\ud83e\udd16 [MAIN AGENT] POST /agent/trigger \u2014 Fetch Incident Context]').item.json;\nconst cfg = $('[\ud83e\udd16 [MAIN AGENT] GET /api/v1/config/n8n \u2014 Fetch Backend Config]').item.json;\nconst incident = (ctx.incident || ctx.context && ctx.context.incident || {});\nconst inv = (ctx.context && ctx.context.inventory) || {};\nconst suppliers = (ctx.context && ctx.context.suppliers) || [];\n\nconst altSuppliers = suppliers\n  .filter(s => !s.blacklisted && s.status !== 'INACTIVE')\n  .map(s => s.supplier_id + ' (' + s.name + ', lead_time=' + s.lead_time_days + 'd, reliability=' + s.reliability_score + ')')\n  .join(', ') || 'None available';\n\nconst approvalLimit = cfg.autonomous_approval_limit_usd || $env.AUTONOMOUS_APPROVAL_LIMIT_USD || 50000;\n\nconst prompt = `You are the Supply Chain Recovery Planner for the incident management system.\n\nBased on the primary LLM analysis and full incident context below, generate a structured recovery action plan.\n\n===== PRIMARY ANALYSIS RESULT =====\n- Incident ID: ${dec.incident_id}\n- Decision: ${dec.decision}\n- Routing Target: ${dec.routing_target}\n- Incident Type: ${dec.incident_type}\n- Recommended Action: ${dec.recommended_action}\n- Reasoning: ${dec.reasoning}\n- Estimated Impact: ${dec.estimated_impact}\n- Estimated Cost (USD): ${dec.estimated_cost_usd ?? 'Unknown'}\n- Autonomous Approval Limit: $${approvalLimit}\n- Anomalies Detected: ${JSON.stringify(dec.anomalies_detected || [])}\n\n===== PRODUCT / INVENTORY CONTEXT =====\n- Component ID: ${incident.affected_component || 'Unknown'}\n- Current Stock: ${inv.current_stock ?? 'Unknown'}\n- Days of Supply Remaining: ${inv.days_of_supply ?? 'Unknown'}\n- Delay Days: ${incident.delay_days || 0}\n- Financial Loss Risk (USD): ${dec.estimated_cost_usd ?? 'Unknown'}\n\n===== ALTERNATIVE SUPPLIERS =====\n${altSuppliers}\n\n===== INSTRUCTIONS =====\nAnalyze the situation and output ONLY the following strict JSON (no markdown, no explanation):\n{\n  \"action_summary\": \"<1-2 sentence plain-English recovery action>\",\n  \"logistics_reroute\": <true if rerouting logistics is needed | false>,\n  \"expedite_recommended\": <true if expedited shipping should be used | false>,\n  \"estimated_recovery_hours\": <integer estimate of hours to recover supply>,\n  \"risk_mitigation_steps\": [\"<step 1>\", \"<step 2>\", \"<step 3>\"]\n}`;\n\nreturn [{ json: {\n  incident_id: dec.incident_id,\n  correlation_id: dec.correlation_id,\n  decision: dec.decision,\n  routing_target: dec.routing_target,\n  incident_type: dec.incident_type,\n  anomalies_detected: dec.anomalies_detected,\n  recommended_action: dec.recommended_action,\n  reasoning: dec.reasoning,\n  estimated_impact: dec.estimated_impact,\n  estimated_cost_usd: dec.estimated_cost_usd,\n  requires_approval: dec.requires_approval,\n  groq_raw: dec.groq_raw,\n  post_analysis_prompt: prompt,\n  cfg_notify_from_email: cfg.notify_from_email || $env.NOTIFY_FROM_EMAIL || '',\n  cfg_approval_notify_email: cfg.approval_notify_email || $env.APPROVAL_NOTIFY_EMAIL || '',\n  cfg_ops_alert_email: cfg.ops_alert_email || $env.OPS_ALERT_EMAIL || '',\n  cfg_approval_limit: cfg.autonomous_approval_limit_usd || approvalLimit,\n  cfg_llm_model: cfg.llm_config && cfg.llm_config.model || $env.GROQ_MODEL || 'llama-3.3-70b-versatile'\n}}];\n"
+      }
+    },
+    {
+      "id": "agent-post-analysis-llm",
+      "name": "🤖 [MAIN AGENT] Groq Post-Analysis LLM",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [1680, 1600],
+      "notes": "POST-ANALYSIS LLM: Separate Groq invocation for recovery action planning.\nModel and temperature are fetched dynamically from $env (set via .env / docker-compose).\nThis node is downstream of the primary routing decision so it never blocks routing.",
+      "parameters": {
+        "model": "={{ $env.GROQ_MODEL || 'llama-3.3-70b-versatile' }}",
+        "options": {
+          "temperature": "={{ parseFloat($env.GROQ_TEMPERATURE || '0.1') }}",
+          "maxTokens": 800
+        }
+      },
+      "credentials": { "groqApi": { "id": "groq-credential-id", "name": "Groq API" } }
+    },
+    {
+      "id": "agent-post-analysis-chain",
+      "name": "🤖 [MAIN AGENT] Groq Post-Analysis Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [1920, 1440],
+      "notes": "Invokes the Post-Analysis Groq LLM with the recovery planning prompt.\nOutputs raw text that is parsed by the next node into strict JSON.",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.post_analysis_prompt }}"
+      }
+    },
+    {
+      "id": "agent-post-analysis-parse",
+      "name": "🤖 [MAIN AGENT] Parse Post-Analysis Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2160, 1440],
+      "notes": "Parses post-analysis Groq output into strict JSON action plan.\nFallback: safe defaults if parse fails (no exceptions propagate).\nPasses both the original decision fields AND the action plan forward.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const rawText = $json.text || $json.response || '';\nconst upstream = $('[\ud83e\udd16 [MAIN AGENT] Build Groq Post-Analysis Prompt]').item.json;\n\nlet actionPlan = {\n  action_summary: 'Manual recovery review recommended',\n  logistics_reroute: false,\n  expedite_recommended: false,\n  estimated_recovery_hours: 72,\n  risk_mitigation_steps: ['Escalate to ops team', 'Review supplier alternatives', 'Monitor stock levels']\n};\n\ntry {\n  // Try to extract JSON block from LLM response\n  const match = rawText.match(/\\{[\\s\\S]*?\\}/);\n  if (match) {\n    const candidate = JSON.parse(match[0]);\n    // Validate required fields exist\n    if (candidate.action_summary) actionPlan = { ...actionPlan, ...candidate };\n  }\n} catch(e) {\n  // Keep safe defaults on parse failure — never throw\n}\n\n// Ensure array type\nif (!Array.isArray(actionPlan.risk_mitigation_steps)) {\n  actionPlan.risk_mitigation_steps = [String(actionPlan.risk_mitigation_steps || 'Review manually')];\n}\n\nreturn [{ json: {\n  // Pass through all decision fields from primary LLM stage\n  incident_id: upstream.incident_id,\n  correlation_id: upstream.correlation_id,\n  decision: upstream.decision,\n  routing_target: upstream.routing_target,\n  incident_type: upstream.incident_type,\n  anomalies_detected: upstream.anomalies_detected,\n  recommended_action: upstream.recommended_action,\n  reasoning: upstream.reasoning,\n  estimated_impact: upstream.estimated_impact,\n  estimated_cost_usd: upstream.estimated_cost_usd,\n  requires_approval: upstream.requires_approval,\n  groq_raw: upstream.groq_raw,\n  // Dynamic config values (surfaced for downstream email/approval nodes)\n  cfg_notify_from_email: upstream.cfg_notify_from_email,\n  cfg_approval_notify_email: upstream.cfg_approval_notify_email,\n  cfg_ops_alert_email: upstream.cfg_ops_alert_email,\n  cfg_approval_limit: upstream.cfg_approval_limit,\n  cfg_llm_model: upstream.cfg_llm_model,\n  // Post-analysis action plan\n  action_plan: {\n    action_summary: actionPlan.action_summary,\n    logistics_reroute: Boolean(actionPlan.logistics_reroute),\n    expedite_recommended: Boolean(actionPlan.expedite_recommended),\n    estimated_recovery_hours: Number(actionPlan.estimated_recovery_hours) || 72,\n    risk_mitigation_steps: actionPlan.risk_mitigation_steps\n  },\n  post_analysis_raw: rawText\n}}];\n"
+      }
+    },
+    {
+      "id": "agent-respond",
+      "name": "🤖 [MAIN AGENT] Respond 200 — Analysis Complete",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3400, 1440],
+      "notes": "Returns complete analysis result to caller — now includes action_plan from post-analysis stage.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, status: 'COMPLETED', incident_id: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.incident_id, correlation_id: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.correlation_id, decision: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.decision, routing_target: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.routing_target, anomalies_detected: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.anomalies_detected, recommended_action: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.recommended_action, reasoning: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.reasoning, action_plan: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.action_plan } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+
+    {
+      "id": "appr-webhook",
+      "name": "✅ [APPROVAL] Webhook — POST /webhook/approval-required",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 2040],
+      "notes": "AGENT: HUMAN_APPROVAL_AGENT\nReceives approval requests from Main LLM Agent.",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "approval-required",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "59fc0f78-8662-41c9-b7f2-0302a54c013c"
+    },
+    {
+      "id": "appr-format",
+      "name": "✅ [APPROVAL] Format Approval Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 2040],
+      "notes": "Builds approval email with approve/reject links.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const b = $json.body || $json;\nconst base = $env.N8N_BASE_URL;\nconst approver = encodeURIComponent($env.APPROVAL_APPROVER_NAME || 'procurement_manager');\nconst correlationId = encodeURIComponent(b.correlation_id || '');\nconst approveUrl = base + '/webhook/approval-decision/approve?incident_id=' + encodeURIComponent(b.incident_id) + '&plan_id=' + encodeURIComponent(b.plan_id || '') + '&approver=' + approver + '&correlation_id=' + correlationId;\nconst rejectUrl = base + '/webhook/approval-decision/reject?incident_id=' + encodeURIComponent(b.incident_id) + '&plan_id=' + encodeURIComponent(b.plan_id || '') + '&approver=' + approver + '&reason=' + encodeURIComponent('Cost exceeds budget') + '&correlation_id=' + correlationId;\nconst limit = $env.AUTONOMOUS_APPROVAL_LIMIT_USD || 50000;\nconst text = `SUPPLY CHAIN DISRUPTION — APPROVAL REQUIRED\\n\\nIncident ID: ${b.incident_id}\\nCorrelation ID: ${b.correlation_id}\\n\\nRequired Action: ${b.required_action || 'Review recovery plan'}\\nReason: ${b.reason || 'Cost exceeds $' + limit}\\n\\nEstimated Cost: ${b.estimated_cost || 'Unknown'} ${b.currency || 'USD'}\\nApproval Threshold: $${limit}\\nRisk Level: ${b.risk || 'Unknown'}\\n\\n✅ APPROVE: ${approveUrl}\\n\\n❌ REJECT: ${rejectUrl}\\n\\nThis approval request will expire in 24 hours.`;\nreturn [{ json: {\n  incident_id: b.incident_id,\n  plan_id: b.plan_id,\n  estimated_cost: b.estimated_cost,\n  risk: b.risk,\n  correlation_id: b.correlation_id,\n  approve_url: approveUrl,\n  reject_url: rejectUrl,\n  email_text: text\n}}];\n"
+      }
+    },
+    {
+      "id": "appr-email",
+      "name": "✅ [APPROVAL] Send Approval Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [480, 2040],
+      "notes": "Sends approval request email to procurement manager.",
+      "parameters": {
+        "fromEmail": "={{ $env.NOTIFY_FROM_EMAIL }}",
+        "toEmail": "={{ $env.APPROVAL_NOTIFY_EMAIL }}",
+        "subject": "=[ACTION REQUIRED] Approval: Incident {{ $json.incident_id }} — Est. Cost {{ $json.estimated_cost }} USD",
+        "text": "={{ $json.email_text }}",
+        "options": {}
+      },
+      "credentials": { "smtp": { "id": "1", "name": "SMTP account" } }
+    },
+    {
+      "id": "appr-erp-log",
+      "name": "✅ [APPROVAL] POST /integrations/erp/log — Approval Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 2040],
+      "notes": "ERP log: records approval request dispatch.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'APPROVAL_REQUEST_SENT', entity_type: 'RECOVERY_PLAN', entity_id: $json.plan_id, incident_id: $json.incident_id, performed_by: 'n8n:HUMAN_APPROVAL_AGENT', details: { estimated_cost: $json.estimated_cost, risk: $json.risk, channel: 'email' }, status: 'SUCCESS', correlation_id: $json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "appr-audit",
+      "name": "✅ [APPROVAL] Build Audit — Approval Sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 2040],
+      "notes": "Builds audit event for approval request dispatch.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const src = $('[✅ [APPROVAL] Format Approval Email]').item.json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'HUMAN_APPROVAL_ORCHESTRATOR',\n  event_type: 'APPROVAL_REQUEST_SENT',\n  incident_id: src.incident_id,\n  entity_type: 'RECOVERY_PLAN',\n  entity_id: src.plan_id,\n  action: 'SEND_APPROVAL_EMAIL',\n  status: 'SUCCESS',\n  decision: 'APPROVAL_REQUEST_SENT',\n  reason: 'Approval email sent — awaiting human decision',\n  correlation_id: src.correlation_id,\n  retry_count: 0,\n  notification_status: 'EMAIL_SENT',\n  input: { estimated_cost: src.estimated_cost, risk: src.risk },\n  output: { channel: 'email', approve_url: src.approve_url }\n}}];\n"
+      }
+    },
+    {
+      "id": "appr-log-audit",
+      "name": "✅ [APPROVAL] POST /integrations/audit — Approval Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 2040],
+      "notes": "Persists approval request audit event.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "appr-respond-200",
+      "name": "✅ [APPROVAL] Respond 200 — Approval Queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 2040],
+      "notes": "Returns confirmation that approval email was dispatched.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, status: 'AWAITING_APPROVAL', incident_id: $('[✅ [APPROVAL] Format Approval Email]').item.json.incident_id, correlation_id: $('[✅ [APPROVAL] Format Approval Email]').item.json.correlation_id, notification_sent: true, message: 'Approval email dispatched. Awaiting procurement manager decision.' } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "dec-webhook",
+      "name": "✅ [APPROVAL] Webhook — GET /webhook/approval-decision/:decision",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 2200],
+      "notes": "Receives approve/reject decisions from email links.",
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "approval-decision/:decision",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "2da59737-1b95-4b49-b7ae-0e684048f86c"
+    },
+    {
+      "id": "dec-parse",
+      "name": "✅ [APPROVAL] Parse Decision + Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 2200],
+      "notes": "Parses decision from URL params. Validates incident_id.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const q = $json.query || {};\nconst params = $json.params || {};\nconst decision = (params.decision || '').toLowerCase();\nreturn [{ json: {\n  decision,\n  incident_id: q.incident_id,\n  plan_id: q.plan_id,\n  approver: q.approver || 'procurement_manager',\n  reason: q.reason || null,\n  correlation_id: q.correlation_id || null,\n  is_valid_decision: ['approve','reject'].includes(decision)\n}}];\n"
+      }
+    },
+    {
+      "id": "dec-if-approve",
+      "name": "✅ [APPROVAL] IF Decision = Approve",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 2200],
+      "notes": "Routes approve → /agent/approve | reject → /agent/reject",
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{ "id": "c5", "leftValue": "={{ $json.decision }}", "rightValue": "approve", "operator": { "type": "string", "operation": "equals" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "dec-approve",
+      "name": "✅ [APPROVAL] POST /agent/approve — Human Approved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 2140],
+      "notes": "Executes human-approved recovery plan.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/agent/approve",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: $json.incident_id, approver: $json.approver } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "dec-reject",
+      "name": "✅ [APPROVAL] POST /agent/reject — Human Rejected",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 2280],
+      "notes": "Rejects plan — backend will replan.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/agent/reject",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { incident_id: $json.incident_id, approver: $json.approver, reason: $json.reason } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "dec-erp-log",
+      "name": "✅ [APPROVAL] POST /integrations/erp/log — Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 2200],
+      "notes": "ERP log: records human approve/reject decision.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'HUMAN_DECISION_RECORDED', entity_type: 'INCIDENT', entity_id: $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.incident_id, incident_id: $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.incident_id, performed_by: $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.approver, details: { decision: $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.decision, reason: $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.reason }, status: 'SUCCESS', correlation_id: $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "dec-build-audit",
+      "name": "✅ [APPROVAL] Build Audit — Human Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 2200],
+      "notes": "Builds audit event for human approval/rejection.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const dec = $('[✅ [APPROVAL] Parse Decision + Validate]').item.json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'HUMAN_APPROVAL_ORCHESTRATOR',\n  event_type: dec.decision === 'approve' ? 'APPROVED' : 'REJECTED',\n  incident_id: dec.incident_id,\n  entity_type: 'RECOVERY_PLAN',\n  entity_id: dec.plan_id,\n  action: dec.decision === 'approve' ? 'HUMAN_APPROVED' : 'HUMAN_REJECTED',\n  status: 'SUCCESS',\n  decision: dec.decision.toUpperCase(),\n  reason: dec.reason || (dec.decision === 'approve' ? 'Procurement manager approved recovery plan' : 'Procurement manager rejected recovery plan'),\n  correlation_id: dec.correlation_id,\n  retry_count: 0,\n  input: { approver: dec.approver },\n  output: { decision: dec.decision }\n}}];\n"
+      }
+    },
+    {
+      "id": "dec-log-audit",
+      "name": "✅ [APPROVAL] POST /integrations/audit — Human Decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 2200],
+      "notes": "Persists human decision audit event.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "dec-respond-approve",
+      "name": "✅ [APPROVAL] Respond — Approved Confirmation (HTML)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1680, 2140],
+      "notes": "HTML confirmation page shown to approver.",
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<html><head><title>Approved</title><style>body{font-family:sans-serif;text-align:center;padding:60px;background:#f0fdf4;}h1{color:#15803d;}p{color:#374151;}</style></head><body><h1>✅ Recovery Plan Approved</h1><p>Incident <strong>{{ $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.incident_id }}</strong> has been approved for autonomous execution.</p><p>The supply chain agent will now execute the recovery plan.</p><p style='color:#6b7280;font-size:12px;'>You may close this tab.</p></body></html>",
+        "options": { "responseCode": 200, "responseHeaders": { "entries": [{ "name": "Content-Type", "value": "text/html" }] } }
+      }
+    },
+    {
+      "id": "dec-respond-reject",
+      "name": "✅ [APPROVAL] Respond — Rejected Confirmation (HTML)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1680, 2280],
+      "notes": "HTML confirmation page shown to approver after rejection.",
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "=<html><head><title>Rejected</title><style>body{font-family:sans-serif;text-align:center;padding:60px;background:#fef2f2;}h1{color:#b91c1c;}p{color:#374151;}</style></head><body><h1>❌ Recovery Plan Rejected</h1><p>Incident <strong>{{ $('[✅ [APPROVAL] Parse Decision + Validate]').item.json.incident_id }}</strong> has been rejected.</p><p>The agent will replan and propose an alternative.</p><p style='color:#6b7280;font-size:12px;'>You may close this tab.</p></body></html>",
+        "options": { "responseCode": 200, "responseHeaders": { "entries": [{ "name": "Content-Type", "value": "text/html" }] } }
+      }
+    },
+
+    {
+      "id": "notify-webhook",
+      "name": "🔔 [NOTIFY] Webhook — POST /webhook/notify",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 2520],
+      "notes": "AGENT: NOTIFICATION_AGENT\nEntry point for all system notifications.",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "notif-0001-0000-0000-000000000001"
+    },
+    {
+      "id": "notify-classify",
+      "name": "🔔 [NOTIFY] Classify Notification Urgency",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 2520],
+      "notes": "Classifies notification by type and urgency level.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const b = $json.body || $json;\nconst urgency = (b.urgency || 'MEDIUM').toUpperCase();\nconst type = b.notification_type || 'GENERAL';\nreturn [{ json: {\n  notification_id: 'NOTIF-' + Date.now(),\n  notification_type: type,\n  urgency,\n  incident_id: b.incident_id || null,\n  message: b.message || 'Supply chain notification',\n  correlation_id: b.correlation_id || null,\n  send_email: ['CRITICAL','HIGH'].includes(urgency),\n  details: b\n}}];\n"
+      }
+    },
+    {
+      "id": "notify-if-email",
+      "name": "🔔 [NOTIFY] IF Email Required (CRITICAL/HIGH)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [480, 2520],
+      "notes": "CRITICAL/HIGH → send email | MEDIUM/LOW → audit only",
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [{ "id": "c6", "leftValue": "={{ $json.send_email }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "notify-email",
+      "name": "🔔 [NOTIFY] Send Ops Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [720, 2460],
+      "notes": "Sends urgent notification to ops team.",
+      "parameters": {
+        "fromEmail": "={{ $env.NOTIFY_FROM_EMAIL }}",
+        "toEmail": "={{ $env.OPS_ALERT_EMAIL }}",
+        "subject": "=[{{ $json.urgency }}] Supply Chain Alert: {{ $json.notification_type }} — Incident {{ $json.incident_id }}",
+        "text": "={{ $json.message }}",
+        "options": {}
+      },
+      "credentials": { "smtp": { "id": "1", "name": "SMTP account" } }
+    },
+    {
+      "id": "notify-audit",
+      "name": "🔔 [NOTIFY] Build Audit — Notification Sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 2520],
+      "notes": "Builds audit event for notification dispatch.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const n = $('[🔔 [NOTIFY] Classify Notification Urgency]').item.json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'NOTIFICATION_AGENT',\n  event_type: 'NOTIFICATION_SENT',\n  incident_id: n.incident_id,\n  entity_type: 'NOTIFICATION',\n  entity_id: n.notification_id,\n  action: 'SEND_NOTIFICATION',\n  status: 'SUCCESS',\n  decision: 'NOTIFICATION_SENT',\n  reason: 'Notification type: ' + n.notification_type + ', urgency: ' + n.urgency,\n  correlation_id: n.correlation_id,\n  retry_count: 0,\n  notification_status: n.send_email ? 'EMAIL_SENT' : 'LOG_ONLY',\n  input: { type: n.notification_type, urgency: n.urgency },\n  output: { notification_id: n.notification_id }\n}}];\n"
+      }
+    },
+    {
+      "id": "notify-log-audit",
+      "name": "🔔 [NOTIFY] POST /integrations/audit — Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 2520],
+      "notes": "Persists notification audit event.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "notify-respond",
+      "name": "🔔 [NOTIFY] Respond 200 — Notification Queued",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 2520],
+      "notes": "Returns notification dispatch confirmation.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, notification_id: $('[🔔 [NOTIFY] Classify Notification Urgency]').item.json.notification_id, urgency: $('[🔔 [NOTIFY] Classify Notification Urgency]').item.json.urgency, email_sent: $('[🔔 [NOTIFY] Classify Notification Urgency]').item.json.send_email, status: 'SENT' } }}",
+        "options": { "responseCode": 200 }
+      }
+    },
+
+    {
+      "id": "err-trigger",
+      "name": "🔁 [ERROR] Global Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 3080],
+      "notes": "AGENT: RETRY_ERROR_HANDLER\nGlobal error handler — catches any unhandled node failure.",
+      "parameters": {}
+    },
+    {
+      "id": "err-classify",
+      "name": "🔁 [ERROR] Classify Error Type",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 3080],
+      "notes": "Classifies error: transient, permanent, auth, timeout, validation.\nDetermines retryable status.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const err = $json;\nconst execErr = err.execution && err.execution.error ? err.execution.error : {};\nconst msg = (execErr.message || '').toLowerCase();\nconst nodeName = err.node && err.node.name ? err.node.name : 'UNKNOWN_NODE';\nconst workflowName = err.workflow && err.workflow.name ? err.workflow.name : 'UNKNOWN_WORKFLOW';\n\nlet errorType = 'UNKNOWN';\nlet retryable = false;\nlet urgency = 'MEDIUM';\n\nif (msg.includes('401') || msg.includes('403') || msg.includes('unauthorized') || msg.includes('forbidden')) {\n  errorType = 'AUTH_FAILURE';\n  retryable = false;\n  urgency = 'CRITICAL';\n} else if (msg.includes('timeout') || msg.includes('econnreset') || msg.includes('etimedout')) {\n  errorType = 'TIMEOUT';\n  retryable = true;\n  urgency = 'HIGH';\n} else if (msg.includes('400') || msg.includes('validation')) {\n  errorType = 'VALIDATION_FAILURE';\n  retryable = false;\n  urgency = 'MEDIUM';\n} else if (msg.includes('404')) {\n  errorType = 'NOT_FOUND';\n  retryable = false;\n  urgency = 'MEDIUM';\n} else if (msg.includes('5') || msg.includes('503') || msg.includes('502') || msg.includes('500')) {\n  errorType = 'HTTP_5XX';\n  retryable = true;\n  urgency = 'HIGH';\n} else if (msg.includes('groq') || msg.includes('llm')) {\n  errorType = 'LLM_FAILURE';\n  retryable = true;\n  urgency = 'HIGH';\n}\n\nreturn [{ json: {\n  error_id: 'ERR-' + Date.now(),\n  correlation_id: 'CORR-ERR-' + Date.now(),\n  error_type: errorType,\n  retryable,\n  urgency,\n  workflow_name: workflowName,\n  node_name: nodeName,\n  error_message: execErr.message || 'Unknown error',\n  execution_id: err.execution && err.execution.id ? err.execution.id : null\n}}];\n"
+      }
+    },
+    {
+      "id": "err-record",
+      "name": "🔁 [ERROR] POST /integrations/erp/log — Error Record",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 3080],
+      "notes": "Records integration error to backend erp_logs.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/erp/log",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { action: 'WORKFLOW_ERROR', entity_type: 'N8N_EXECUTION', entity_id: $json.execution_id || $json.error_id, performed_by: 'n8n:ERROR_HANDLER', details: { error_type: $json.error_type, node_name: $json.node_name, error_message: $json.error_message, retryable: $json.retryable }, status: 'FAILURE', correlation_id: $json.correlation_id, error_details: $json.error_message } }}",
+        "options": {}
+      },
+      "retryOnFail": false
+    },
+    {
+      "id": "err-notify",
+      "name": "🔁 [ERROR] POST /webhook/notify — Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 3080],
+      "notes": "Sends error notification via Notification Agent.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.N8N_BASE_URL }}/webhook/notify",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Content-Type", "value": "application/json" }]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { notification_type: $json.error_type, urgency: $json.urgency, message: 'Workflow error in ' + $json.workflow_name + ' at node ' + $json.node_name + ': ' + $json.error_message, correlation_id: $json.correlation_id } }}",
+        "options": {}
+      },
+      "retryOnFail": false
+    },
+    {
+      "id": "err-build-audit",
+      "name": "🔁 [ERROR] Build Audit — Workflow Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 3080],
+      "notes": "Builds audit event for workflow error.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const err = $json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: err.workflow_name,\n  event_type: 'WORKFLOW_FAILED',\n  incident_id: null,\n  entity_type: 'N8N_EXECUTION',\n  entity_id: err.execution_id || err.error_id,\n  action: err.node_name,\n  status: 'FAILURE',\n  decision: 'WORKFLOW_FAILED',\n  reason: err.error_type + ': ' + err.error_message,\n  correlation_id: err.correlation_id,\n  retry_count: 0,\n  error_details: err.error_message,\n  input: {},\n  output: { error_type: err.error_type, retryable: err.retryable }\n}}];\n"
+      }
+    },
+    {
+      "id": "err-log-audit",
+      "name": "🔁 [ERROR] POST /integrations/audit — Workflow Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 3080],
+      "notes": "Persists workflow error to audit trail.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": false
+    },
+
+    {
+      "id": "report-webhook",
+      "name": "📊 [REPORT] Webhook — POST /webhook/generate-report",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 3660],
+      "notes": "AGENT: REPORT_GENERATOR_AGENT\nOn-demand audit trail report generation.\nParams: { format: 'csv'|'pdf'|'both', incident_id?: string }",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-report",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "report-0001-0000-0000-000000000001"
+    },
+    {
+      "id": "report-params",
+      "name": "📊 [REPORT] Parse Report Parameters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 3660],
+      "notes": "Parses and validates report parameters.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const b = $json.body || $json;\nconst format = (b.format || 'both').toLowerCase();\nconst validFormats = ['csv','pdf','both'];\nreturn [{ json: {\n  report_id: 'RPT-' + Date.now(),\n  correlation_id: 'CORR-RPT-' + Date.now(),\n  format: validFormats.includes(format) ? format : 'both',\n  incident_id: b.incident_id || null,\n  generate_csv: format === 'csv' || format === 'both',\n  generate_pdf: format === 'pdf' || format === 'both',\n  requested_at: new Date().toISOString()\n}}];\n"
+      }
+    },
+    {
+      "id": "report-csv-url",
+      "name": "📊 [REPORT] Build CSV Report URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 3660],
+      "notes": "Builds download URLs for CSV and PDF reports.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const p = $json;\nconst base = $env.BACKEND_URL;\nconst suffix = p.incident_id ? '?incident_id=' + encodeURIComponent(p.incident_id) : '';\nreturn [{ json: {\n  ...p,\n  csv_url: p.generate_csv ? (base + '/integrations/audit/report/csv' + suffix) : null,\n  pdf_url: p.generate_pdf ? (base + '/integrations/audit/report/pdf' + suffix) : null\n}}];\n"
+      }
+    },
+    {
+      "id": "report-audit",
+      "name": "📊 [REPORT] Build Audit — Report Generated",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 3660],
+      "notes": "Builds audit event for report generation.",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const p = $json;\nreturn [{ json: {\n  event_id: 'AUD-' + Date.now(),\n  timestamp: new Date().toISOString(),\n  source: 'n8n',\n  workflow: 'REPORT_GENERATOR',\n  event_type: 'REPORT_GENERATED',\n  incident_id: p.incident_id,\n  entity_type: 'REPORT',\n  entity_id: p.report_id,\n  action: 'GENERATE_AUDIT_REPORT',\n  status: 'SUCCESS',\n  decision: 'REPORT_GENERATED',\n  reason: 'Audit trail report generated in format: ' + p.format,\n  correlation_id: p.correlation_id,\n  retry_count: 0,\n  input: { format: p.format, incident_id: p.incident_id },\n  output: { csv_url: p.csv_url, pdf_url: p.pdf_url }\n}}];\n"
+      }
+    },
+    {
+      "id": "report-log-audit",
+      "name": "📊 [REPORT] POST /integrations/audit — Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 3660],
+      "notes": "Persists report generation audit event.",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_URL }}/integrations/audit",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [
+          { "name": "X-API-Key", "value": "={{ $env.BACKEND_API_KEY }}" },
+          { "name": "Content-Type", "value": "application/json" }
+        ]},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "report-respond",
+      "name": "📊 [REPORT] Respond 200 — Report Ready",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 3660],
+      "notes": "Returns report metadata with download URLs.",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, status: 'GENERATED', report_id: $('[📊 [REPORT] Build CSV Report URL]').item.json.report_id, correlation_id: $('[📊 [REPORT] Build CSV Report URL]').item.json.correlation_id, format: $('[📊 [REPORT] Build CSV Report URL]').item.json.format, incident_id: $('[📊 [REPORT] Build CSV Report URL]').item.json.incident_id, csv_download_url: $('[📊 [REPORT] Build CSV Report URL]').item.json.csv_url, pdf_download_url: $('[📊 [REPORT] Build CSV Report URL]').item.json.pdf_url, generated_at: $('[📊 [REPORT] Parse Report Parameters]').item.json.requested_at, message: 'Audit trail report ready. Use the download URLs to retrieve CSV and/or PDF.' } }}",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+
+  "connections": {
+    "📦 [ERP RECEIVER] Webhook — POST /webhook/erp-event": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] Normalize ERP Payload", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] Normalize ERP Payload": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] Validate Required Fields", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] Validate Required Fields": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] IF Valid", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] IF Valid": {
+      "main": [
+        [{ "node": "📦 [ERP RECEIVER] POST /integrations/erp/event", "type": "main", "index": 0 }],
+        [{ "node": "📦 [ERP RECEIVER] Build Audit — Validation Failed", "type": "main", "index": 0 }]
+      ]
+    },
+    "📦 [ERP RECEIVER] POST /integrations/erp/event": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] IF Agent Trigger Required", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] IF Agent Trigger Required": {
+      "main": [
+        [{ "node": "📦 [ERP RECEIVER] POST /webhook/agent/analyze-incident", "type": "main", "index": 0 }],
+        [{ "node": "📦 [ERP RECEIVER] POST /integrations/erp/log — Synced", "type": "main", "index": 0 }]
+      ]
+    },
+    "📦 [ERP RECEIVER] POST /webhook/agent/analyze-incident": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] POST /integrations/erp/log — Agent Triggered", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] POST /integrations/erp/log — Agent Triggered": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] Build Audit — Agent Triggered", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] Build Audit — Agent Triggered": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] POST /integrations/audit — Triggered", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] POST /integrations/audit — Triggered": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] Respond 200 — Synced + Agent Triggered", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] POST /integrations/erp/log — Synced": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] Build Audit — Synced No Trigger", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] Build Audit — Synced No Trigger": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] POST /integrations/audit — Synced", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] POST /integrations/audit — Synced": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] Respond 200 — Synced", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] Build Audit — Validation Failed": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] POST /integrations/audit — Validation Failed", "type": "main", "index": 0 }]]
+    },
+    "📦 [ERP RECEIVER] POST /integrations/audit — Validation Failed": {
+      "main": [[{ "node": "📦 [ERP RECEIVER] Respond 400 — Invalid Payload", "type": "main", "index": 0 }]]
+    },
+
+    "⏰ [MONITOR] Schedule — Every 5 Minutes": {
+      "main": [[{ "node": "⏰ [MONITOR] GET /integrations/purchase-orders/active", "type": "main", "index": 0 }]]
+    },
+    "⏰ [MONITOR] GET /integrations/purchase-orders/active": {
+      "main": [[{ "node": "⏰ [MONITOR] IF Active POs Found", "type": "main", "index": 0 }]]
+    },
+    "⏰ [MONITOR] IF Active POs Found": {
+      "main": [
+        [{ "node": "⏰ [MONITOR] Evaluate Delivery Commitments", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "⏰ [MONITOR] Evaluate Delivery Commitments": {
+      "main": [[{ "node": "⏰ [MONITOR] Idempotency Check — Deduplicate Breaches", "type": "main", "index": 0 }]]
+    },
+    "⏰ [MONITOR] Idempotency Check — Deduplicate Breaches": {
+      "main": [[{ "node": "⏰ [MONITOR] POST /integrations/delivery-breach", "type": "main", "index": 0 }]]
+    },
+    "⏰ [MONITOR] POST /integrations/delivery-breach": {
+      "main": [[{ "node": "⏰ [MONITOR] POST /webhook/agent/analyze-incident", "type": "main", "index": 0 }]]
+    },
+    "⏰ [MONITOR] POST /webhook/agent/analyze-incident": {
+      "main": [[{ "node": "⏰ [MONITOR] POST /integrations/erp/log — Breach Detected", "type": "main", "index": 0 }]]
+    },
+    "⏰ [MONITOR] POST /integrations/erp/log — Breach Detected": {
+      "main": [[{ "node": "⏰ [MONITOR] Build Audit — Delivery Breach", "type": "main", "index": 0 }]]
+    },
+    "⏰ [MONITOR] Build Audit — Delivery Breach": {
+      "main": [[{ "node": "⏰ [MONITOR] POST /integrations/audit — Breach", "type": "main", "index": 0 }]]
+    },
+
+    "🏭 [SUPPLIER] Webhook — POST /webhook/supplier-response": {
+      "main": [[{ "node": "🏭 [SUPPLIER] Normalize Supplier Payload", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] Normalize Supplier Payload": {
+      "main": [[{ "node": "🏭 [SUPPLIER] Validate Supplier Response", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] Validate Supplier Response": {
+      "main": [[{ "node": "🏭 [SUPPLIER] IF Valid Response", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] IF Valid Response": {
+      "main": [
+        [{ "node": "🏭 [SUPPLIER] POST /integrations/supplier-response", "type": "main", "index": 0 }],
+        [{ "node": "🏭 [SUPPLIER] Build Audit — Validation Failed", "type": "main", "index": 0 }]
+      ]
+    },
+    "🏭 [SUPPLIER] POST /integrations/supplier-response": {
+      "main": [[{ "node": "🏭 [SUPPLIER] POST /integrations/erp/log — Response Received", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] POST /integrations/erp/log — Response Received": {
+      "main": [[{ "node": "🏭 [SUPPLIER] Build Audit — Response OK", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] Build Audit — Response OK": {
+      "main": [[{ "node": "🏭 [SUPPLIER] POST /integrations/audit — Response OK", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] POST /integrations/audit — Response OK": {
+      "main": [[{ "node": "🏭 [SUPPLIER] Respond 200 — Synced", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] Build Audit — Validation Failed": {
+      "main": [[{ "node": "🏭 [SUPPLIER] POST /integrations/audit — Validation Failed", "type": "main", "index": 0 }]]
+    },
+    "🏭 [SUPPLIER] POST /integrations/audit — Validation Failed": {
+      "main": [[{ "node": "🏭 [SUPPLIER] Respond 400 — Invalid Response", "type": "main", "index": 0 }]]
+    },
+
+    "🤖 [MAIN AGENT] Webhook — POST /webhook/agent/analyze-incident": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] GET /api/v1/config/n8n — Fetch Backend Config", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] GET /api/v1/config/n8n — Fetch Backend Config": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] POST /agent/trigger — Fetch Incident Context", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] POST /agent/trigger — Fetch Incident Context": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Build LLM Prompt with Anomaly Detection", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Build LLM Prompt with Anomaly Detection": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Invoke Groq — Incident Reasoning & Routing", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Groq LLM — LLaMA-3.3-70B (temp=0.1)": {
+      "ai_languageModel": [[{ "node": "🤖 [MAIN AGENT] Invoke Groq — Incident Reasoning & Routing", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Invoke Groq — Incident Reasoning & Routing": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Parse Groq Decision + Route", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Parse Groq Decision + Route": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Build Groq Post-Analysis Prompt", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Build Groq Post-Analysis Prompt": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Groq Post-Analysis Chain", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Groq Post-Analysis LLM": {
+      "ai_languageModel": [[{ "node": "🤖 [MAIN AGENT] Groq Post-Analysis Chain", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Groq Post-Analysis Chain": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Parse Post-Analysis Output", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Parse Post-Analysis Output": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] IF Autonomous Approval", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] IF Autonomous Approval": {
+      "main": [
+        [{ "node": "🤖 [MAIN AGENT] POST /agent/approve — Autonomous", "type": "main", "index": 0 }],
+        [{ "node": "🤖 [MAIN AGENT] Switch — Route Non-Autonomous Decisions", "type": "main", "index": 0 }]
+      ]
+    },
+    "🤖 [MAIN AGENT] POST /agent/approve — Autonomous": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Merge All Decision Branches", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Switch — Route Non-Autonomous Decisions": {
+      "main": [
+        [{ "node": "🤖 [MAIN AGENT] POST /agent/reject — Needs Human", "type": "main", "index": 0 }],
+        [{ "node": "🤖 [MAIN AGENT] POST /webhook/notify — Data Inconsistency", "type": "main", "index": 0 }],
+        [{ "node": "🤖 [MAIN AGENT] POST /webhook/notify — Escalation", "type": "main", "index": 0 }]
+      ]
+    },
+    "🤖 [MAIN AGENT] POST /agent/reject — Needs Human": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] POST /webhook/approval-required", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] POST /webhook/approval-required": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Merge All Decision Branches", "type": "main", "index": 1 }]]
+    },
+    "🤖 [MAIN AGENT] POST /webhook/notify — Data Inconsistency": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Merge All Decision Branches", "type": "main", "index": 2 }]]
+    },
+    "🤖 [MAIN AGENT] POST /webhook/notify — Escalation": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Merge All Decision Branches", "type": "main", "index": 3 }]]
+    },
+    "🤖 [MAIN AGENT] Merge All Decision Branches": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] POST /integrations/erp/log — Decision", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] POST /integrations/erp/log — Decision": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Build Audit — LLM Decision", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] Build Audit — LLM Decision": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] POST /integrations/audit — LLM Decision", "type": "main", "index": 0 }]]
+    },
+    "🤖 [MAIN AGENT] POST /integrations/audit — LLM Decision": {
+      "main": [[{ "node": "🤖 [MAIN AGENT] Respond 200 — Analysis Complete", "type": "main", "index": 0 }]]
+    },
+
+    "✅ [APPROVAL] Webhook — POST /webhook/approval-required": {
+      "main": [[{ "node": "✅ [APPROVAL] Format Approval Email", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] Format Approval Email": {
+      "main": [[{ "node": "✅ [APPROVAL] Send Approval Email", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] Send Approval Email": {
+      "main": [[{ "node": "✅ [APPROVAL] POST /integrations/erp/log — Approval Sent", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] POST /integrations/erp/log — Approval Sent": {
+      "main": [[{ "node": "✅ [APPROVAL] Build Audit — Approval Sent", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] Build Audit — Approval Sent": {
+      "main": [[{ "node": "✅ [APPROVAL] POST /integrations/audit — Approval Sent", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] POST /integrations/audit — Approval Sent": {
+      "main": [[{ "node": "✅ [APPROVAL] Respond 200 — Approval Queued", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] Webhook — GET /webhook/approval-decision/:decision": {
+      "main": [[{ "node": "✅ [APPROVAL] Parse Decision + Validate", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] Parse Decision + Validate": {
+      "main": [[{ "node": "✅ [APPROVAL] IF Decision = Approve", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] IF Decision = Approve": {
+      "main": [
+        [{ "node": "✅ [APPROVAL] POST /agent/approve — Human Approved", "type": "main", "index": 0 }],
+        [{ "node": "✅ [APPROVAL] POST /agent/reject — Human Rejected", "type": "main", "index": 0 }]
+      ]
+    },
+    "✅ [APPROVAL] POST /agent/approve — Human Approved": {
+      "main": [[{ "node": "✅ [APPROVAL] POST /integrations/erp/log — Decision", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] POST /agent/reject — Human Rejected": {
+      "main": [[{ "node": "✅ [APPROVAL] POST /integrations/erp/log — Decision", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] POST /integrations/erp/log — Decision": {
+      "main": [[{ "node": "✅ [APPROVAL] Build Audit — Human Decision", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] Build Audit — Human Decision": {
+      "main": [[{ "node": "✅ [APPROVAL] POST /integrations/audit — Human Decision", "type": "main", "index": 0 }]]
+    },
+    "✅ [APPROVAL] POST /integrations/audit — Human Decision": {
+      "main": [
+        [{ "node": "✅ [APPROVAL] Respond — Approved Confirmation (HTML)", "type": "main", "index": 0 }],
+        [{ "node": "✅ [APPROVAL] Respond — Rejected Confirmation (HTML)", "type": "main", "index": 1 }]
+      ]
+    },
+
+    "🔔 [NOTIFY] Webhook — POST /webhook/notify": {
+      "main": [[{ "node": "🔔 [NOTIFY] Classify Notification Urgency", "type": "main", "index": 0 }]]
+    },
+    "🔔 [NOTIFY] Classify Notification Urgency": {
+      "main": [[{ "node": "🔔 [NOTIFY] IF Email Required (CRITICAL/HIGH)", "type": "main", "index": 0 }]]
+    },
+    "🔔 [NOTIFY] IF Email Required (CRITICAL/HIGH)": {
+      "main": [
+        [{ "node": "🔔 [NOTIFY] Send Ops Alert Email", "type": "main", "index": 0 }],
+        [{ "node": "🔔 [NOTIFY] Build Audit — Notification Sent", "type": "main", "index": 0 }]
+      ]
+    },
+    "🔔 [NOTIFY] Send Ops Alert Email": {
+      "main": [[{ "node": "🔔 [NOTIFY] Build Audit — Notification Sent", "type": "main", "index": 0 }]]
+    },
+    "🔔 [NOTIFY] Build Audit — Notification Sent": {
+      "main": [[{ "node": "🔔 [NOTIFY] POST /integrations/audit — Notification", "type": "main", "index": 0 }]]
+    },
+    "🔔 [NOTIFY] POST /integrations/audit — Notification": {
+      "main": [[{ "node": "🔔 [NOTIFY] Respond 200 — Notification Queued", "type": "main", "index": 0 }]]
+    },
+
+    "🔁 [ERROR] Global Error Trigger": {
+      "main": [[{ "node": "🔁 [ERROR] Classify Error Type", "type": "main", "index": 0 }]]
+    },
+    "🔁 [ERROR] Classify Error Type": {
+      "main": [[{ "node": "🔁 [ERROR] POST /integrations/erp/log — Error Record", "type": "main", "index": 0 }]]
+    },
+    "🔁 [ERROR] POST /integrations/erp/log — Error Record": {
+      "main": [[{ "node": "🔁 [ERROR] POST /webhook/notify — Error Alert", "type": "main", "index": 0 }]]
+    },
+    "🔁 [ERROR] POST /webhook/notify — Error Alert": {
+      "main": [[{ "node": "🔁 [ERROR] Build Audit — Workflow Error", "type": "main", "index": 0 }]]
+    },
+    "🔁 [ERROR] Build Audit — Workflow Error": {
+      "main": [[{ "node": "🔁 [ERROR] POST /integrations/audit — Workflow Error", "type": "main", "index": 0 }]]
+    },
+
+    "📊 [REPORT] Webhook — POST /webhook/generate-report": {
+      "main": [[{ "node": "📊 [REPORT] Parse Report Parameters", "type": "main", "index": 0 }]]
+    },
+    "📊 [REPORT] Parse Report Parameters": {
+      "main": [[{ "node": "📊 [REPORT] Build CSV Report URL", "type": "main", "index": 0 }]]
+    },
+    "📊 [REPORT] Build CSV Report URL": {
+      "main": [[{ "node": "📊 [REPORT] Build Audit — Report Generated", "type": "main", "index": 0 }]]
+    },
+    "📊 [REPORT] Build Audit — Report Generated": {
+      "main": [[{ "node": "📊 [REPORT] POST /integrations/audit — Report", "type": "main", "index": 0 }]]
+    },
+    "📊 [REPORT] POST /integrations/audit — Report": {
+      "main": [[{ "node": "📊 [REPORT] Respond 200 — Report Ready", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "supply-chain-resilience-agent"
+  },
+
+  "__ENV_REQUIRED__": {
+    "_comment": "Set in n8n Settings → Variables (self-hosted) or process env",
+    "BACKEND_URL": "http://localhost:8000",
+    "N8N_BASE_URL": "http://localhost:5678",
+    "BACKEND_API_KEY": "changeme-secret-key",
+    "AUTONOMOUS_APPROVAL_LIMIT_USD": "50000",
+    "APPROVAL_APPROVER_NAME": "procurement_manager",
+    "APPROVAL_NOTIFY_EMAIL": "procurement@yourcompany.com",
+    "NOTIFY_FROM_EMAIL": "noreply@yourcompany.com",
+    "OPS_ALERT_EMAIL": "ops@yourcompany.com",
+    "GROQ_CREDENTIAL_NOTE": "Add Groq API credential in n8n Credentials → Groq API. Model: llama-3.3-70b-versatile"
+  },
+
+  "__AGENT_MAP__": {
+    "ERP_EVENT_RECEIVER": "Section 1 — POST /webhook/erp-event",
+    "DELIVERY_MONITORING_AGENT": "Section 2 — Scheduled every 5 min",
+    "SUPPLIER_RESPONSE_AGENT": "Section 3 — POST /webhook/supplier-response",
+    "MAIN_LLM_AGENT": "Section 4 — POST /webhook/agent/analyze-incident (Groq LLaMA-3.3-70B)",
+    "HUMAN_APPROVAL_AGENT": "Section 5 — POST /webhook/approval-required + GET /webhook/approval-decision/:decision",
+    "NOTIFICATION_AGENT": "Section 6 — POST /webhook/notify",
+    "RETRY_ERROR_HANDLER": "Section 8 — Global Error Trigger",
+    "REPORT_GENERATOR_AGENT": "Section 10 — POST /webhook/generate-report"
+  }
+}

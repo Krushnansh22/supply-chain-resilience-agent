@@ -6,6 +6,8 @@
  * Renders the safe, human-readable narration only (team doc Section 14) —
  * NEVER shows raw LLM output, only the `action` field written by audit_logger.log_event().
  */
+import ActivityFeed from "../audit/ActivityFeed.jsx";
+
 export default function AgentActivityFeed({ auditLogs }) {
   const recent = auditLogs.slice(-12).reverse();
 

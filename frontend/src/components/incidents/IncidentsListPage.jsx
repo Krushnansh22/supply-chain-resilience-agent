@@ -21,7 +21,7 @@ export default function IncidentsListPage() {
   const [severityFilter, setSeverityFilter] = useState("ALL");
 
   useEffect(() => {
-    Promise.all([listIncidents(), listProductionOrders()])
+    Promise.all([listIncidents("all"), listProductionOrders()])
       .then(([incidentsRes, productionsRes]) => {
         setIncidents(incidentsRes);
         setProductions(productionsRes);

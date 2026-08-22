@@ -13,20 +13,19 @@ Populates MongoDB with comprehensive hero scenario data covering:
   - Pre-seeded audit logs for dashboard demo
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo.database import Database
 from app.repositories.inventory_repository import InventoryRepository
 
-NOW = datetime.utcnow()
+NOW = datetime.now(timezone.utc)
 
 
 def run(db: Database) -> None:
     """Seeds the MongoDB with comprehensive realistic supply chain data."""
     inventory_repo = InventoryRepository(db)
 
-    # Idempotency guard — skip if already seeded
-    if inventory_repo.collection.count_documents({}) > 0:
-        return
+    # Upserts below make startup additive: existing records are preserved while
+    # missing demo records and newly introduced fields are backfilled.
 
     # ------------------------------------------------------------------
     # 1. INVENTORY  (8 items — normal, low, critical, over-stock, broken)

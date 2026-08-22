@@ -16,6 +16,7 @@ import StatusBadge from "../common/StatusBadge.jsx";
 import InfoCards from "./InfoCards.jsx";
 import RecoveryPlanPanel from "./RecoveryPlanPanel.jsx";
 import ApprovalModal from "./ApprovalModal.jsx";
+import ActivityFeed from "../audit/ActivityFeed.jsx";
 
 const FLOW_STEPS = [
   { key: "DETECTED", label: "Disruption" },
@@ -49,7 +50,7 @@ export default function IncidentCommandCenter() {
     refresh();
     const interval = setInterval(() => {
       if (agentState !== "RESOLVED") refresh();
-    }, 3000);
+    }, 2000);
     return () => clearInterval(interval);
   }, [refresh, agentState]);
 
@@ -123,7 +124,7 @@ export default function IncidentCommandCenter() {
         )}
       </div>
 
-      {plan && <RecoveryPlanPanel plan={plan} incidentId={incidentId} onExecuted={refresh} />}
+      {plan && <RecoveryPlanPanel plan={plan} incident={incident} />}
 
       {agentState === "WAITING_APPROVAL" && plan && (
         <ApprovalModal plan={plan} incidentId={incidentId} onDecided={refresh} />

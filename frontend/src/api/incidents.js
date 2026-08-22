@@ -5,7 +5,7 @@
  */
 import { apiRequest } from "./client.js";
 
-export const listIncidents = () => apiRequest("/incidents/");
+export const listIncidents = (category = "all") => apiRequest(`/incidents/?category=${category}`);
 export const getIncident = (incidentId) => apiRequest(`/incidents/${incidentId}`);
 
 // routes_incidents.py now exposes this scoped endpoint — use it instead of

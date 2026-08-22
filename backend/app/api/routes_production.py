@@ -3,7 +3,7 @@ app/api/routes_production.py
 Owner: Developer 2 (Backend / Simulation)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -11,6 +11,9 @@ from app.repositories.production_order_repository import ProductionOrderReposito
 from app.schemas.common import ProductionOrderOut
 
 router = APIRouter()
+
+_PRODUCTION_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
+
 
 def get_repo(db: Database = Depends(get_mongo_db)):
     return ProductionOrderRepository(db)
@@ -22,7 +25,10 @@ def list_production_orders(repo: ProductionOrderRepository = Depends(get_repo)):
 
 
 @router.get("/{production_id}", response_model=ProductionOrderOut)
-def get_production_order(production_id: str, repo: ProductionOrderRepository = Depends(get_repo)):
+def get_production_order(
+    production_id: str = Path(..., pattern=_PRODUCTION_ID_PATTERN, min_length=1, max_length=32),
+    repo: ProductionOrderRepository = Depends(get_repo),
+):
     row = repo.get_by_production_id(production_id)
     if not row:
         raise HTTPException(status_code=404, detail="production order not found")

@@ -5,8 +5,9 @@
  * DELIVERS: POST /simulator/inject -> new Incident
  */
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { injectScenario } from "../../api/simulator.js";
+import { triggerAgent } from "../../api/agent.js";
 
 const SCENARIOS = [
   { key: "SUPPLIER_DELAY", label: "Supplier Delay" },
@@ -17,9 +18,9 @@ const SCENARIOS = [
 ];
 
 export default function DisruptionSimulatorPanel() {
-  const navigate = useNavigate();
   const [error, setError] = useState(null);
   const [injecting, setInjecting] = useState(null);
+  const [lastIncident, setLastIncident] = useState(null);
 
   const handleInject = async (scenario) => {
     setInjecting(scenario);
@@ -58,6 +59,13 @@ export default function DisruptionSimulatorPanel() {
             </button>
           ))}
         </div>
+        {lastIncident && (
+          <div style={{ marginTop: 16, color: "var(--text-secondary)", fontSize: 13 }}>
+            Agent investigation started for{" "}
+            <Link to={`/incidents/${lastIncident.incident_id}`}>{lastIncident.incident_id}</Link>.
+            {" "}Follow progress in <Link to="/agent-activity">Agent Activity</Link>.
+          </div>
+        )}
         {error && <div className="error-banner">{error}</div>}
       </div>
     </div>
