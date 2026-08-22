@@ -8,28 +8,47 @@ import { listInventory } from "../../api/inventory.js";
 
 export default function InventoryPage() {
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { listInventory().then(setRows).catch(console.error); }, []);
+  useEffect(() => {
+    listInventory().then(setRows).catch(console.error).finally(() => setLoading(false));
+  }, []);
 
   return (
-    <div className="panel">
-      <h2>Inventory</h2>
-      <table style={{ width: "100%", fontSize: 13 }}>
-        <thead>
-          <tr>
-            <th align="left">Component</th><th align="left">Usable Stock</th>
-            <th align="left">Daily Usage</th><th align="left">Days of Supply</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.component_id}>
-              <td>{r.component_id}</td><td>{r.usable_stock}</td>
-              <td>{r.daily_usage}</td><td>{r.days_of_supply}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div>
+      <div className="page-header">
+        <div>
+          <h1>Inventory</h1>
+          <div className="page-subtitle">{rows.length} components tracked</div>
+        </div>
+      </div>
+      <div className="panel">
+        {loading ? (
+          <p className="empty-state">Loading inventory…</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Component</th><th>Usable Stock</th><th>Daily Usage</th><th>Days of Supply</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.component_id}>
+                  <td>{r.component_id}</td>
+                  <td>{r.usable_stock} / {r.current_stock}</td>
+                  <td>{r.daily_usage}</td>
+                  <td>
+                    <span className={r.days_of_supply != null && r.days_of_supply < 7 ? "badge badge-critical" : ""}>
+                      {r.days_of_supply ?? "—"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }
