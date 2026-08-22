@@ -9,7 +9,7 @@ DELIVERS: JSON consumed by (a) frontend Inventory page (Dev4) and
           (b) indirectly by tools/inventory_tools.py which the agent calls.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -19,6 +19,10 @@ from app.schemas.common import InventoryOut
 from app.decision_engine.inventory_calc import compute_days_of_supply
 
 router = APIRouter()
+
+# Regex enforced on all component_id path parameters.
+# Only alphanumerics and hyphens allowed — blocks path traversal, null bytes, SQL injection.
+_COMPONENT_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
 @router.get("/", response_model=list[InventoryOut])
@@ -34,7 +38,10 @@ def list_inventory(db: Session = Depends(get_db)):
 
 
 @router.get("/{component_id}", response_model=InventoryOut)
-def get_component(component_id: str, db: Session = Depends(get_db)):
+def get_component(
+    component_id: str = Path(..., pattern=_COMPONENT_ID_PATTERN, min_length=1, max_length=32),
+    db: Session = Depends(get_db),
+):
     """GET /inventory/{component_id}"""
     row = db.query(Inventory).filter(Inventory.component_id == component_id).first()
     if not row:
@@ -45,12 +52,20 @@ def get_component(component_id: str, db: Session = Depends(get_db)):
 
 
 class AdjustRequest(BaseModel):
-    delta: int    # positive = add stock, negative = remove stock
-    reason: str   # human-readable reason for audit trail
+    delta: int              # positive = add stock, negative = remove stock
+    reason: str             # human-readable reason for audit trail
+
+    class Config:
+        # Prevent extra fields from being injected
+        extra = "forbid"
 
 
 @router.post("/{component_id}/adjust", response_model=InventoryOut)
-def adjust_inventory(component_id: str, req: AdjustRequest, db: Session = Depends(get_db)):
+def adjust_inventory(
+    component_id: str = Path(..., pattern=_COMPONENT_ID_PATTERN, min_length=1, max_length=32),
+    req: AdjustRequest = ...,
+    db: Session = Depends(get_db),
+):
     """
     POST /inventory/{component_id}/adjust
     Adjusts usable_stock by delta (positive = add, negative = reduce).
