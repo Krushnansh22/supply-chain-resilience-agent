@@ -77,7 +77,7 @@ class AuditLogOut(BaseModel):
 
 
 class SupplierMessageOut(BaseModel):
-    message_id: int
+    message_id: str
     supplier_id: str
     po_id: Optional[str] = None
     message: str

@@ -14,8 +14,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # --- Database ---
-    DATABASE_URL: str = "sqlite:///./data/scda.db"
-    MONGO_URI: str = "mongodb://localhost:27017"
+    MONGO_URI: str = ""
+    MONGO_DB_NAME: str = "supply_chain_db"
 
     # --- LLM ---
     LLM_PROVIDER: str = "anthropic"  # anthropic | openai | gemini
@@ -31,7 +31,11 @@ class Settings(BaseSettings):
     # --- Misc ---
     LOG_LEVEL: str = "INFO"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @property
     def cors_origin_list(self) -> list[str]:

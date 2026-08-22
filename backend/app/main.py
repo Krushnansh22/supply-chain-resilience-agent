@@ -15,7 +15,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.mongo_database import get_mongo_db
+from app.mongo_database import get_mongo_db, ping_mongo
 from seed_data.seed_data import run as seed_run
 from seed_data.broken_data import inject_broken_data
 
@@ -46,6 +46,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
+    ping_mongo()
     db = get_mongo_db()
     seed_run(db)
     inject_broken_data(db)

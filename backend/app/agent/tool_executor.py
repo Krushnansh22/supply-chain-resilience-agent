@@ -12,13 +12,13 @@ DELIVERS: schemas/tool_io.ToolResult, returned to agent_loop.py to feed back int
           LLM conversation and into audit logging.
 """
 
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
 from app.tools import inventory_tools, production_tools, supplier_tools, rfq_tools, approval_tools, erp_tools
 from app.schemas.tool_io import ToolResult
 
 
-def execute_tool(tool_name: str, tool_input: dict, db: Session) -> ToolResult:
+def execute_tool(tool_name: str, tool_input: dict, db: Database) -> ToolResult:
     """
     TODO (Dev1): expand this dispatch table as tools are finalized. `build_recovery_plan`
     is intentionally more involved since it needs RFQ rows already persisted by a prior

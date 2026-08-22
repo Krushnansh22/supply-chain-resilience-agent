@@ -5,6 +5,7 @@ Owner: Developer 2 (Backend / Simulation)
 Populates MongoDB with hero scenario data + filler data using the new Repository layer.
 """
 
+from datetime import datetime, timedelta
 from pymongo.database import Database
 from app.repositories.inventory_repository import InventoryRepository
 
@@ -47,8 +48,8 @@ def run(db: Database) -> None:
 
     # 4. Seed Production Orders
     prods = [
-        {"production_id": "PROD-882", "product": "Widget-X", "component_id": "COMP-104", "quantity": 200, "component_per_unit": 3, "priority": "HIGH", "status": "ON_TRACK"},
-        {"production_id": "PROD-990", "product": "Widget-Y", "component_id": "COMP-201", "quantity": 50, "component_per_unit": 1, "priority": "MEDIUM", "status": "ON_TRACK"},
+        {"production_id": "PROD-882", "product": "Widget-X", "component_id": "COMP-104", "quantity": 200, "component_per_unit": 3, "deadline": datetime.utcnow() + timedelta(days=6), "priority": "HIGH", "status": "ON_TRACK"},
+        {"production_id": "PROD-990", "product": "Widget-Y", "component_id": "COMP-201", "quantity": 50, "component_per_unit": 1, "deadline": datetime.utcnow() + timedelta(days=12), "priority": "MEDIUM", "status": "ON_TRACK"},
     ]
     for p in prods:
         prod_collection.update_one({"production_id": p["production_id"]}, {"$set": p}, upsert=True)

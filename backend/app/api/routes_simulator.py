@@ -13,10 +13,10 @@ DELIVERS: creates a row in `incidents` (and any supporting fake data, e.g. a sup
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from pymongo.database import Database
 
-from app.database import get_db
+from app.mongo_database import get_mongo_db
 from app.schemas.common import IncidentOut
 from app.simulator.disruption_injector import inject_scenario, SCENARIO_DEFAULTS
 
@@ -30,7 +30,7 @@ class InjectRequest(BaseModel):
 
 
 @router.post("/inject", response_model=IncidentOut)
-def inject(req: InjectRequest, db: Session = Depends(get_db)):
+def inject(req: InjectRequest, db: Database = Depends(get_mongo_db)):
     """POST /simulator/inject {"scenario": "SUPPLIER_DELAY"} -> creates a new incident.
     Returns 422 if scenario name is unknown.
     """

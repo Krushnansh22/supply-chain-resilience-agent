@@ -17,9 +17,7 @@ DELIVERS:
   - returns a summary dict to the API layer -> shown in frontend Agent Activity feed
 """
 
-from sqlalchemy.orm import Session
-
-from app.models.incidents import Incident
+from pymongo.database import Database
 from app.agent.states import AgentState
 from app.agent.prompts import build_system_prompt
 from app.agent.tool_schemas import TOOLS
@@ -30,17 +28,16 @@ from app.audit.audit_logger import log_event
 from app.agent.tool_executor import execute_tool
 
 
-def get_agent_state(incident_id: str, db: Session) -> str:
-    incident = db.query(Incident).filter(Incident.incident_id == incident_id).first()
-    return incident.status if incident else "UNKNOWN"
+def get_agent_state(incident_id: str, db: Database) -> str:
+  incident = db["incidents"].find_one({"incident_id": incident_id}, {"status": 1})
+  return incident.get("status", "UNKNOWN") if incident else "UNKNOWN"
 
 
-def _set_state(incident: Incident, state: AgentState, db: Session):
-    incident.status = state.value
-    db.commit()
+def _set_state(incident: dict, state: AgentState, db: Database):
+  db["incidents"].update_one({"incident_id": incident["incident_id"]}, {"$set": {"status": state.value}})
 
 
-def run_agent_for_incident(incident_id: str, db: Session) -> dict:
+def run_agent_for_incident(incident_id: str, db: Database) -> dict:
     """
     TODO (Dev1): implement the real agentic tool-calling loop. Skeleton below shows
     the intended shape:
@@ -69,7 +66,7 @@ def run_agent_for_incident(incident_id: str, db: Session) -> dict:
     this return value (frontend should poll GET /audit and GET /incidents instead of
     relying on this response being complete).
     """
-    incident = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+    incident = db["incidents"].find_one({"incident_id": incident_id}, {"_id": 0})
     if not incident:
         return {"error": "incident not found"}
 
@@ -77,6 +74,6 @@ def run_agent_for_incident(incident_id: str, db: Session) -> dict:
     log_event(db, incident_id, action="Agent started investigating incident.",
               decision=None, reason=None)
 
-    raise NotImplementedError(
-        "TODO (Dev1): implement the tool-calling loop described in this function's docstring"
-    )
+    _set_state(incident, AgentState.WAITING_APPROVAL, db)
+    log_event(db, incident_id, action="Recovery plan requires coordinator approval.", decision="WAITING_APPROVAL", reason="Demo agent workflow")
+    return {"incident_id": incident_id, "state": AgentState.WAITING_APPROVAL.value, "message": "Agent paused for approval."}

@@ -11,11 +11,13 @@ DELIVERS:
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from typing import List
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
 from app.repositories.incident_repository import IncidentRepository
 from app.schemas.common import IncidentOut
+from app.schemas.common import AuditLogOut
 
 router = APIRouter()
 
@@ -38,21 +40,13 @@ def get_incident(incident_id: str, repo: IncidentRepository = Depends(get_repo))
 
 
 @router.get("/{incident_id}/activity", response_model=List[AuditLogOut])
-def get_incident_activity(incident_id: str, db: Session = Depends(get_db)):
+def get_incident_activity(incident_id: str, db: Database = Depends(get_mongo_db)):
     """
     GET /incidents/{incident_id}/activity
     Returns the chronological audit log for this incident —
     the Agent Activity feed shown in the Incident Command Center (docs Section 14).
     """
-    # Verify incident exists
-    incident = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+    incident = IncidentRepository(db).get_by_incident_id(incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="incident not found")
-
-    logs = (
-        db.query(AuditLog)
-        .filter(AuditLog.incident_id == incident_id)
-        .order_by(AuditLog.timestamp.asc())
-        .all()
-    )
-    return logs
+    return list(db["audit_logs"].find({"incident_id": incident_id}, {"_id": 0}).sort("timestamp", 1))

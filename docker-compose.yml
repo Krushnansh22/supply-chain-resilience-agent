@@ -3,7 +3,7 @@
 # Owner: Developer 2 (Backend / Simulation) + Developer 4 (Frontend) coordinate this file
 #
 # Brings up:
-#   - backend  -> FastAPI + SQLite simulated ERP + Agent + Decision Engine  (port 8000)
+#   - backend  -> FastAPI + MongoDB Atlas + Agent + Decision Engine         (port 8000)
 #   - frontend -> React Control Tower UI                                    (port 5173)
 #
 # Run:
@@ -27,9 +27,6 @@ services:
     volumes:
       # Mount source for hot-reload during hackathon dev; remove for a "frozen" demo build.
       - ./backend/app:/app/app
-      - scda-data:/app/data   # persisted SQLite file lives here
-    environment:
-      - DATABASE_URL=sqlite:////app/data/scda.db
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -49,5 +46,3 @@ services:
       - backend
     command: npm run dev -- --host 0.0.0.0
 
-volumes:
-  scda-data:

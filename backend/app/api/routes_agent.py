@@ -14,10 +14,10 @@ DELIVERS:
 """
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from pymongo.database import Database
 
-from app.database import get_db
+from app.mongo_database import get_mongo_db
 from app.agent.agent_loop import run_agent_for_incident, get_agent_state
 from app.agent.states import AgentState
 
@@ -34,7 +34,7 @@ class ApprovalDecision(BaseModel):
 
 
 @router.post("/trigger")
-def trigger_agent(req: TriggerRequest, db: Session = Depends(get_db)):
+def trigger_agent(req: TriggerRequest, db: Database = Depends(get_mongo_db)):
     """
     Kick off (or resume) the agent loop for a given incident.
     TODO (Dev1): decide sync vs background-task execution. For an 18h hackathon,
@@ -46,20 +46,38 @@ def trigger_agent(req: TriggerRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/state/{incident_id}")
-def agent_state(incident_id: str, db: Session = Depends(get_db)):
+def agent_state(incident_id: str, db: Database = Depends(get_mongo_db)):
     return {"incident_id": incident_id, "state": get_agent_state(incident_id, db)}
 
 
+@router.get("/plan/{incident_id}")
+def agent_plan(incident_id: str, db: Database = Depends(get_mongo_db)):
+    plan = db["recovery_plans"].find_one({"incident_id": incident_id}, {"_id": 0})
+    if not plan:
+        return {"incident_id": incident_id, "options": [], "recommended_option_id": "", "recommendation_reason": "No recovery plan has been generated.", "requires_human_approval": False, "approval_threshold_usd": 50000}
+    return plan
+
+
 @router.post("/approve")
-def approve_plan(decision: ApprovalDecision, db: Session = Depends(get_db)):
+def approve_plan(decision: ApprovalDecision, db: Database = Depends(get_mongo_db)):
     """
     TODO (Dev1): on approval, transition state WAITING_APPROVAL -> EXECUTING,
     call tools/erp_tools.update_erp(), write audit log, transition -> RESOLVED.
     """
-    raise NotImplementedError("TODO: wire approval flow into agent_loop.py")
+    incident = db["incidents"].find_one({"incident_id": decision.incident_id}, {"_id": 0})
+    if not incident:
+        return {"error": "incident not found"}
+    db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.EXECUTING.value}})
+    db["audit_logs"].insert_one({"incident_id": decision.incident_id, "action": "Recovery plan approved by coordinator.", "decision": "APPROVED"})
+    return {"incident_id": decision.incident_id, "state": AgentState.EXECUTING.value}
 
 
 @router.post("/reject")
-def reject_plan(decision: ApprovalDecision, db: Session = Depends(get_db)):
+def reject_plan(decision: ApprovalDecision, db: Database = Depends(get_mongo_db)):
     """TODO (Dev1): on rejection, trigger REPLANNING state with 'human rejected' as context."""
-    raise NotImplementedError("TODO: wire rejection flow into agent_loop.py")
+    incident = db["incidents"].find_one({"incident_id": decision.incident_id}, {"_id": 0})
+    if not incident:
+        return {"error": "incident not found"}
+    db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.REPLANNING.value}})
+    db["audit_logs"].insert_one({"incident_id": decision.incident_id, "action": "Recovery plan rejected; replanning required.", "decision": "REJECTED"})
+    return {"incident_id": decision.incident_id, "state": AgentState.REPLANNING.value}
