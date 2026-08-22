@@ -3,9 +3,7 @@
  * Owner: Developer 4 (Frontend)
  *
  * Single source of truth for severity -> color mapping (incident.severity from
- * schemas/common.IncidentOut: LOW | MEDIUM | HIGH | CRITICAL). Previously this
- * map was copy-pasted in several components; centralizing it here so every
- * page renders severity consistently.
+ * schemas/common.IncidentOut: LOW | MEDIUM | HIGH | CRITICAL).
  */
 const SEVERITY_CLASS = {
   CRITICAL: "badge-critical",
