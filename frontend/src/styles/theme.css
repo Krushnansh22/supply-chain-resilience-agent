@@ -1,0 +1,93 @@
+/**
+ * src/styles/theme.css
+ * Owner: Developer 4 (Frontend)
+ *
+ * Base design tokens for the "Control Tower" look: an operations/command-center
+ * feel (dark canvas, high-contrast status colors for severity levels), NOT a
+ * marketing landing page. Treat this file as the single source of color/spacing
+ * tokens — components should reference these variables, not hardcode hex values,
+ * so the whole UI can be retoned in one place if the team wants to iterate.
+ *
+ * CHOSEN (not PS-required) — adjust freely, this is a starting point only.
+ */
+
+:root {
+  /* Surface */
+  --bg-canvas: #0b0e14;
+  --bg-panel: #131720;
+  --bg-panel-raised: #1a2030;
+  --border-subtle: #262d3d;
+
+  /* Text */
+  --text-primary: #e8ecf4;
+  --text-secondary: #8b93a7;
+  --text-muted: #5b6376;
+
+  /* Severity / status */
+  --status-critical: #ef4444;
+  --status-high: #f59e0b;
+  --status-medium: #eab308;
+  --status-low: #22c55e;
+  --status-info: #38bdf8;
+
+  /* Accent (agent activity / interactive) */
+  --accent: #6ee7ff;
+  --accent-dim: #1f5766;
+
+  /* Type */
+  --font-display: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+
+  --radius: 6px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-content {
+  padding: var(--space-4);
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-critical { background: color-mix(in srgb, var(--status-critical) 20%, transparent); color: var(--status-critical); }
+.badge-high     { background: color-mix(in srgb, var(--status-high) 20%, transparent); color: var(--status-high); }
+.badge-medium   { background: color-mix(in srgb, var(--status-medium) 20%, transparent); color: var(--status-medium); }
+.badge-low      { background: color-mix(in srgb, var(--status-low) 20%, transparent); color: var(--status-low); }
