@@ -3,12 +3,17 @@ app/main.py
 Owner: Developer 2 (Backend / Simulation)
 
 FastAPI application entrypoint. Mounts every router from app/api/*, enables CORS
-for the React frontend, and initializes the SQLite DB + seed data on startup.
+for the React frontend, and initializes MongoDB + seed data on startup.
+
+NOTE: LLM logic is handled entirely in the n8n workflow (Groq AI Agent node).
+This backend is a pure CRUD / data API — no LLM provider configured here.
 
 RECEIVES: nothing (this is the process entrypoint)
-DELIVERS: the running HTTP API that Dev4's frontend and Dev1's agent both talk to.
-  - Swagger UI at /docs is the fastest way for all 4 devs to sanity-check the API
-    contract in docs/API_CONTRACTS.md without waiting on the frontend.
+DELIVERS:
+  - Swagger UI at /docs — fastest API contract sanity-check for the full team
+  - /integrations/* — n8n-only endpoints (ERP event, delivery breach, supplier response, audit)
+  - /agent/* — agent state machine (trigger, approve, reject, state, plan)
+  - /incidents, /inventory, /suppliers, /production, /audit, /simulator — frontend + agent
 """
 
 from fastapi import FastAPI
@@ -27,6 +32,7 @@ from app.api import (
     routes_audit,
     routes_agent,
     routes_simulator,
+    routes_integrations,
 )
 
 app = FastAPI(
@@ -66,3 +72,5 @@ app.include_router(routes_incidents.router, prefix="/incidents", tags=["Incident
 app.include_router(routes_audit.router, prefix="/audit", tags=["Audit"])
 app.include_router(routes_agent.router, prefix="/agent", tags=["Agent"])
 app.include_router(routes_simulator.router, prefix="/simulator", tags=["Simulator"])
+# --- n8n integration layer (called by n8n workflow, not frontend) ---
+app.include_router(routes_integrations.router, prefix="/integrations", tags=["N8N Integrations"])
