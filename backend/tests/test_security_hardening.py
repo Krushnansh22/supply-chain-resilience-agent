@@ -23,14 +23,21 @@ from app.middleware.rate_limiter import (
 )
 
 
+import mongomock
+from app.mongo_database import get_mongo_db
+
+
 @pytest.fixture(autouse=True)
-def clean_rate_limit_store():
-    """Clear in-memory rate limit store before and after each test."""
+def clean_rate_limit_and_mock_db():
+    """Clear in-memory rate limit store and mock MongoDB for test isolation."""
+    mock_db = mongomock.MongoClient()["test_scda"]
+    app.dependency_overrides[get_mongo_db] = lambda: mock_db
     with _lock:
         _store.clear()
     yield
     with _lock:
         _store.clear()
+    app.dependency_overrides.pop(get_mongo_db, None)
 
 
 def test_gap1_spoofed_x_forwarded_for_not_trusted_by_default():
