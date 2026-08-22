@@ -27,7 +27,7 @@ export default function OverviewDashboard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
-    Promise.all([listIncidents(), listAuditLogs(), listProductionOrders()])
+    Promise.all([listIncidents("operational"), listAuditLogs(), listProductionOrders()])
       .then(([incidentsRes, auditRes, productionRes]) => {
         setIncidents(incidentsRes);
         setAuditLogs(auditRes);
@@ -41,7 +41,7 @@ export default function OverviewDashboard() {
     load();
     // Light polling so the control tower reflects the agent loop live during
     // a demo without requiring a manual refresh between simulator clicks.
-    const interval = setInterval(load, 5000);
+    const interval = setInterval(load, 2000);
     return () => clearInterval(interval);
   }, [load]);
 

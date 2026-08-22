@@ -27,6 +27,7 @@ import StatusBadge from "../common/StatusBadge.jsx";
 import InfoCards from "./InfoCards.jsx";
 import RecoveryPlanPanel from "./RecoveryPlanPanel.jsx";
 import ApprovalModal from "./ApprovalModal.jsx";
+import ActivityFeed from "../audit/ActivityFeed.jsx";
 
 const FLOW_STEPS = [
   { key: "DETECTED", label: "Disruption" },
@@ -63,7 +64,7 @@ export default function IncidentCommandCenter() {
     // Stops once the incident resolves (or on unmount) to avoid needless load.
     const interval = setInterval(() => {
       if (agentState !== "RESOLVED") refresh();
-    }, 3000);
+    }, 2000);
     return () => clearInterval(interval);
   }, [refresh, agentState]);
 
@@ -115,22 +116,9 @@ export default function IncidentCommandCenter() {
 
       <InfoCards incident={incident} plan={plan} />
 
-      <div className="panel" style={{ marginTop: 16 }}>
-        <h3>Agent Activity</h3>
-        {auditLogs.length === 0 ? (
-          <p className="empty-state">No activity yet — trigger the agent to begin investigating.</p>
-        ) : (
-          auditLogs.map((log, i) => (
-            <div key={i} style={{ fontSize: 13, fontFamily: "var(--font-mono)", padding: "4px 0" }}>
-              <span style={{ color: "var(--text-muted)" }}>{new Date(log.timestamp).toLocaleTimeString()}</span>{" "}
-              ✓ {log.action}
-              {log.decision && <span style={{ color: "var(--accent)" }}> — {log.decision}: {log.reason}</span>}
-            </div>
-          ))
-        )}
-      </div>
+      <ActivityFeed logs={auditLogs} compact title="Live incident activity" />
 
-      {plan && <RecoveryPlanPanel plan={plan} incidentId={incidentId} onExecuted={refresh} />}
+      {plan && <RecoveryPlanPanel plan={plan} incident={incident} />}
 
       {agentState === "WAITING_APPROVAL" && plan && (
         <ApprovalModal plan={plan} incidentId={incidentId} onDecided={refresh} />

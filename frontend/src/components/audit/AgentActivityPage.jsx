@@ -3,8 +3,8 @@
  * Raw model chain-of-thought is intentionally not persisted or displayed.
  */
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { listAuditLogs } from "../../api/audit.js";
+import ActivityFeed from "./ActivityFeed.jsx";
 
 export default function AgentActivityPage() {
   const [logs, setLogs] = useState([]);
@@ -18,7 +18,7 @@ export default function AgentActivityPage() {
       if (mounted) setLoading(false);
     });
     load();
-    const interval = setInterval(load, 5000);
+    const interval = setInterval(load, 2000);
     return () => {
       mounted = false;
       clearInterval(interval);
@@ -30,32 +30,11 @@ export default function AgentActivityPage() {
       <div className="page-header">
         <div>
           <h1>Agent Activity</h1>
-          <div className="page-subtitle">Live decisions, state changes, tool calls, and outcomes.</div>
+          <div className="page-subtitle">One live stream for decisions, tool calls, reasons, and technical details.</div>
         </div>
-        <span className="badge badge-info">AUTO-REFRESH 5S</span>
+        <span className="badge badge-info">LIVE · 2S</span>
       </div>
-
-      <div className="panel">
-        {loading ? <p className="empty-state">Loading activity…</p> : logs.length === 0 ? (
-          <p className="empty-state">No agent activity yet.</p>
-        ) : [...logs].reverse().map((log, index) => (
-          <div key={`${log.timestamp}-${index}`} style={{ padding: "12px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", fontSize: 12 }}>
-              <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                {new Date(log.timestamp).toLocaleString()}
-              </span>
-              <span style={{ color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>
-                {log.tool ? `TOOL · ${log.tool}` : "AGENT EVENT"}
-                {log.incident_id && <> · <Link to={`/incidents/${log.incident_id}`}>{log.incident_id}</Link></>}
-              </span>
-            </div>
-            <div style={{ marginTop: 5 }}>{log.action}</div>
-            {log.decision && <div style={{ color: "var(--accent)", fontSize: 13, marginTop: 3 }}>Decision: {log.decision}</div>}
-            {log.reason && <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 3 }}>{log.reason}</div>}
-            {log.result && <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 3 }}>Result: {log.result}</div>}
-          </div>
-        ))}
-      </div>
+      {loading ? <p className="empty-state">Loading activity…</p> : <ActivityFeed logs={logs} showFilters title="Live agent activity" />}
     </div>
   );
 }

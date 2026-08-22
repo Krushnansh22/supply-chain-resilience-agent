@@ -13,8 +13,8 @@ const NAV_ITEMS = [
   { to: "/inventory", label: "📦 Inventory" },
   { to: "/production", label: "🏭 Production" },
   { to: "/suppliers", label: "🏢 Suppliers" },
-  { to: "/audit", label: "📝 Audit" },
   { to: "/agent-activity", label: "🧠 Agent Activity" },
+  { to: "/diagnostics", label: "🛠 Diagnostics" },
   { to: "/simulator", label: "⚡ Simulator" },
 ];
 
