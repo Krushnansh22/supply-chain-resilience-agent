@@ -29,6 +29,7 @@ import InventoryPage from "./components/inventory/InventoryPage.jsx";
 import ProductionPage from "./components/production/ProductionPage.jsx";
 import SuppliersPage from "./components/suppliers/SuppliersPage.jsx";
 import AuditTimeline from "./components/audit/AuditTimeline.jsx";
+import AgentActivityPage from "./components/audit/AgentActivityPage.jsx";
 import DisruptionSimulatorPanel from "./components/simulator/DisruptionSimulatorPanel.jsx";
 
 export default function App() {
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="/production" element={<ProductionPage />} />
               <Route path="/suppliers" element={<SuppliersPage />} />
               <Route path="/audit" element={<AuditTimeline />} />
+              <Route path="/agent-activity" element={<AgentActivityPage />} />
               <Route path="/simulator" element={<DisruptionSimulatorPanel />} />
             </Routes>
           </div>

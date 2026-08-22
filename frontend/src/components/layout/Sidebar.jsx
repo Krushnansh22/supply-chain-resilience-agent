@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: "/production", label: "🏭 Production" },
   { to: "/suppliers", label: "🏢 Suppliers" },
   { to: "/audit", label: "📝 Audit" },
+  { to: "/agent-activity", label: "🧠 Agent Activity" },
   { to: "/simulator", label: "⚡ Simulator" },
 ];
 

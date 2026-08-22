@@ -18,6 +18,7 @@ DELIVERS:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime
 
 from app.config import settings
 from app.mongo_database import get_mongo_db, ping_mongo
@@ -56,6 +57,12 @@ def on_startup():
     db = get_mongo_db()
     seed_run(db)
     inject_broken_data(db)
+    # Older approval handlers created audit rows without timestamps. Backfill
+    # them once so the audit and Agent Activity response contracts stay valid.
+    db["audit_logs"].update_many(
+        {"timestamp": {"$exists": False}},
+        {"$set": {"timestamp": datetime.utcnow()}},
+    )
 
 
 @app.get("/health")

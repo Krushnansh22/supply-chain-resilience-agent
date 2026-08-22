@@ -24,6 +24,7 @@ DELIVERS:
 from pymongo.database import Database
 from app.agent.states import AgentState
 from app.audit.audit_logger import log_event
+from datetime import datetime
 
 
 def get_agent_state(incident_id: str, db: Database) -> str:
@@ -56,6 +57,16 @@ def run_agent_for_incident(incident_id: str, db: Database) -> dict:
 
     # Transition: DETECTED -> INVESTIGATING
     _set_state(incident_id, AgentState.INVESTIGATING, db)
+    db["agent_sessions"].update_one(
+        {"incident_id": incident_id},
+        {"$set": {
+            "incident_id": incident_id,
+            "state": AgentState.INVESTIGATING.value,
+            "updated_at": datetime.utcnow(),
+            "last_context": {"affected_component": incident.get("affected_component")},
+        }, "$inc": {"revision": 1}},
+        upsert=True,
+    )
     log_event(
         db, incident_id,
         action="Agent triggered by n8n workflow. Transitioning to INVESTIGATING.",

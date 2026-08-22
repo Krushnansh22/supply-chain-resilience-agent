@@ -7,8 +7,9 @@
  * DELIVERS: POST /simulator/inject (src/api/simulator.js) -> new Incident
  */
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { injectScenario } from "../../api/simulator.js";
+import { triggerAgent } from "../../api/agent.js";
 
 const SCENARIOS = [
   { key: "SUPPLIER_DELAY", label: "Inject Supplier Delay" },
@@ -19,18 +20,17 @@ const SCENARIOS = [
 ];
 
 export default function DisruptionSimulatorPanel() {
-  const navigate = useNavigate();
   const [error, setError] = useState(null);
   const [injecting, setInjecting] = useState(null);
+  const [lastIncident, setLastIncident] = useState(null);
 
   const handleInject = async (scenario) => {
     setInjecting(scenario);
     setError(null);
     try {
       const incident = await injectScenario(scenario);
-      // TODO (Dev4): also call POST /agent/trigger here once agent_loop.py works,
-      // so the demo doesn't require a separate manual "trigger" click.
-      navigate(`/incidents/${incident.incident_id}`);
+      await triggerAgent(incident.incident_id);
+      setLastIncident(incident);
     } catch (err) {
       setError(err.message || "Failed to inject scenario.");
     } finally {
@@ -54,6 +54,13 @@ export default function DisruptionSimulatorPanel() {
             </button>
           ))}
         </div>
+        {lastIncident && (
+          <div style={{ marginTop: 16, color: "var(--text-secondary)", fontSize: 13 }}>
+            Agent investigation started for{" "}
+            <Link to={`/incidents/${lastIncident.incident_id}`}>{lastIncident.incident_id}</Link>.
+            {" "}Follow progress in <Link to="/agent-activity">Agent Activity</Link>.
+          </div>
+        )}
         {error && <div className="error-banner">{error}</div>}
       </div>
     </div>

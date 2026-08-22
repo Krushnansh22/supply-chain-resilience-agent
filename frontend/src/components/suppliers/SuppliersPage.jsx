@@ -29,7 +29,7 @@ export default function SuppliersPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>ID</th><th>Name</th><th>Quality</th><th>Reliability</th><th>Certifications</th>
+                <th>ID</th><th>Name</th><th>Quality</th><th>Reliability</th><th>MOQ</th><th>Certifications</th>
               </tr>
             </thead>
             <tbody>
@@ -39,6 +39,7 @@ export default function SuppliersPage() {
                   <td>{r.name}</td>
                   <td>{r.quality_score}</td>
                   <td>{r.reliability_score}</td>
+                  <td>{r.min_order_qty ?? "—"}</td>
                   <td style={{ color: "var(--text-secondary)" }}>{r.certifications || "—"}</td>
                 </tr>
               ))}

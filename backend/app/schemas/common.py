@@ -28,9 +28,10 @@ class InventoryOut(BaseModel):
 class SupplierOut(BaseModel):
     supplier_id: str
     name: str
-    quality_score: float
-    reliability_score: float
+    quality_score: Optional[float] = None
+    reliability_score: Optional[float] = None
     certifications: Optional[str] = None
+    min_order_qty: Optional[int] = None
 
     class Config:
         from_attributes = True

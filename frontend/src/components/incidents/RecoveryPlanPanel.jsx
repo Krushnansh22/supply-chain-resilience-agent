@@ -7,28 +7,7 @@
  *
  * RECEIVES: `plan` prop, shape = schemas/recovery_plan.RecoveryPlan (Dev3's contract)
  */
-import { useState } from "react";
-import { approvePlan } from "../../api/agent.js";
-
 export default function RecoveryPlanPanel({ plan, incidentId, onExecuted }) {
-  const [executing, setExecuting] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleExecute = async () => {
-    setExecuting(true);
-    setError(null);
-    try {
-      // Below the approval threshold the agent can execute directly — this reuses
-      // the same /agent/approve endpoint (auto-path), matching agent_loop.py's contract.
-      await approvePlan(incidentId);
-      onExecuted?.();
-    } catch (err) {
-      setError(err.message || "Failed to execute recovery plan.");
-    } finally {
-      setExecuting(false);
-    }
-  };
-
   return (
     <div className="panel" style={{ marginTop: 16 }}>
       <h3>Recovery Plan</h3>
@@ -69,12 +48,8 @@ export default function RecoveryPlanPanel({ plan, incidentId, onExecuted }) {
         <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>{plan.recommendation_reason}</p>
       </div>
 
-      {error && <div className="error-banner">{error}</div>}
-
       {!plan.requires_human_approval && (
-        <button className="btn-primary" disabled={executing} onClick={handleExecute}>
-          {executing ? "Executing…" : "▶ EXECUTE"}
-        </button>
+        <div className="badge badge-low">AUTONOMOUS EXECUTION — agent will apply this plan</div>
       )}
       {plan.requires_human_approval && (
         <span className="badge badge-high">HUMAN APPROVAL REQUIRED — see below</span>

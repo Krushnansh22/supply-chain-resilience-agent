@@ -15,6 +15,7 @@ DELIVERS:
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from datetime import datetime
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -68,7 +69,12 @@ def approve_plan(decision: ApprovalDecision, db: Database = Depends(get_mongo_db
     if not incident:
         return {"error": "incident not found"}
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.EXECUTING.value}})
-    db["audit_logs"].insert_one({"incident_id": decision.incident_id, "action": "Recovery plan approved by coordinator.", "decision": "APPROVED"})
+    db["agent_sessions"].update_one(
+        {"incident_id": decision.incident_id},
+        {"$set": {"state": AgentState.EXECUTING.value, "updated_at": datetime.utcnow()}, "$inc": {"revision": 1}},
+        upsert=True,
+    )
+    db["audit_logs"].insert_one({"timestamp": datetime.utcnow(), "incident_id": decision.incident_id, "action": "Recovery plan approved by coordinator.", "decision": "APPROVED"})
     return {"incident_id": decision.incident_id, "state": AgentState.EXECUTING.value}
 
 
@@ -79,5 +85,10 @@ def reject_plan(decision: ApprovalDecision, db: Database = Depends(get_mongo_db)
     if not incident:
         return {"error": "incident not found"}
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.REPLANNING.value}})
-    db["audit_logs"].insert_one({"incident_id": decision.incident_id, "action": "Recovery plan rejected; replanning required.", "decision": "REJECTED"})
+    db["agent_sessions"].update_one(
+        {"incident_id": decision.incident_id},
+        {"$set": {"state": AgentState.REPLANNING.value, "updated_at": datetime.utcnow()}, "$inc": {"revision": 1}},
+        upsert=True,
+    )
+    db["audit_logs"].insert_one({"timestamp": datetime.utcnow(), "incident_id": decision.incident_id, "action": "Recovery plan rejected; replanning required.", "decision": "REJECTED"})
     return {"incident_id": decision.incident_id, "state": AgentState.REPLANNING.value}

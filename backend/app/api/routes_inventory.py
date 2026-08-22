@@ -11,6 +11,7 @@ DELIVERS: JSON consumed by (a) frontend Inventory page (Dev4) and
 
 from fastapi import APIRouter, Depends, HTTPException
 from pymongo.database import Database
+import math
 
 from app.mongo_database import get_mongo_db
 from app.repositories.inventory_repository import InventoryRepository
@@ -28,7 +29,8 @@ def list_inventory(db: Database = Depends(get_mongo_db)):
     out = []
     for r in rows:
         item = InventoryOut(**r)
-        item.days_of_supply = compute_days_of_supply(r["usable_stock"], r["daily_usage"])
+        days_of_supply = compute_days_of_supply(r["usable_stock"], r["daily_usage"])
+        item.days_of_supply = days_of_supply if math.isfinite(days_of_supply) else None
         out.append(item)
     return out
 
@@ -41,7 +43,8 @@ def get_component(component_id: str, db: Database = Depends(get_mongo_db)):
     if not row:
         raise HTTPException(status_code=404, detail="component not found")
     item = InventoryOut(**row)
-    item.days_of_supply = compute_days_of_supply(row["usable_stock"], row["daily_usage"])
+    days_of_supply = compute_days_of_supply(row["usable_stock"], row["daily_usage"])
+    item.days_of_supply = days_of_supply if math.isfinite(days_of_supply) else None
     return item
 
 # TODO (Dev2): POST /inventory/{component_id}/adjust  -- used by update_erp tool

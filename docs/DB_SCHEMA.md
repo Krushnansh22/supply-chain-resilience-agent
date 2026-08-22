@@ -25,6 +25,7 @@ Engine: SQLite (`backend/data/scda.db`). Classification: **CHOSEN** (team doc Se
 | quality_score | float | 0-100 |
 | reliability_score | float | 0-100 |
 | certifications | string | comma-separated, e.g. `ISO9001,RoHS` |
+| min_order_qty | int | minimum units accepted per order |
 
 ## purchase_orders
 | field | type | notes |
@@ -94,6 +95,6 @@ Engine: SQLite (`backend/data/scda.db`). Classification: **CHOSEN** (team doc Se
 | reason | string | nullable |
 
 ## Open decisions (flag in standup)
-- MOQ (minimum order quantity): store per-supplier, per-RFQ, or both? — **TBD by Dev3**
+- MOQ is stored per supplier as `suppliers.min_order_qty`; RFQ responses may still report a quoted quantity.
 - Should `update_erp` mutate `inventory.usable_stock` directly, or only create new
   `purchase_orders` rows and let inventory catch up on "receipt"? — **TBD by Dev2/Dev3**
