@@ -10,24 +10,27 @@ DELIVERS:
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from app.database import get_db
-from app.models.incidents import Incident
+from app.mongo_database import get_mongo_db
+from app.repositories.incident_repository import IncidentRepository
 from app.schemas.common import IncidentOut
 
 router = APIRouter()
 
+def get_repo(db: Database = Depends(get_mongo_db)):
+    return IncidentRepository(db)
+
 
 @router.get("/", response_model=list[IncidentOut])
-def list_incidents(db: Session = Depends(get_db)):
+def list_incidents(repo: IncidentRepository = Depends(get_repo)):
     """GET /incidents -> supports frontend polling for the Overview page."""
-    return db.query(Incident).order_by(Incident.created_at.desc()).all()
+    return repo.list_all_ordered("created_at", -1)
 
 
 @router.get("/{incident_id}", response_model=IncidentOut)
-def get_incident(incident_id: str, db: Session = Depends(get_db)):
-    row = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+def get_incident(incident_id: str, repo: IncidentRepository = Depends(get_repo)):
+    row = repo.get_by_incident_id(incident_id)
     if not row:
         raise HTTPException(status_code=404, detail="incident not found")
     return row

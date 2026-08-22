@@ -15,6 +15,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     # --- Database ---
     DATABASE_URL: str = "sqlite:///./data/scda.db"
+    MONGO_URI: str = "mongodb://localhost:27017"
 
     # --- LLM ---
     LLM_PROVIDER: str = "anthropic"  # anthropic | openai | gemini

@@ -15,7 +15,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.database import init_db
+from app.mongo_database import get_mongo_db
+from seed_data.seed_data import run as seed_run
+from seed_data.broken_data import inject_broken_data
 
 from app.api import (
     routes_inventory,
@@ -44,7 +46,9 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
-    init_db()
+    db = get_mongo_db()
+    seed_run(db)
+    inject_broken_data(db)
 
 
 @app.get("/health")
