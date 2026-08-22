@@ -11,12 +11,11 @@ DELIVERS:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path
-from sqlalchemy.orm import Session
 from typing import List
+from pymongo.database import Database
 
-from app.database import get_db
-from app.models.incidents import Incident
-from app.models.audit_logs import AuditLog
+from app.mongo_database import get_mongo_db
+from app.repositories.incident_repository import IncidentRepository
 from app.schemas.common import IncidentOut, AuditLogOut
 
 router = APIRouter()
@@ -24,18 +23,22 @@ router = APIRouter()
 _INCIDENT_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
+def get_repo(db: Database = Depends(get_mongo_db)):
+    return IncidentRepository(db)
+
+
 @router.get("/", response_model=list[IncidentOut])
-def list_incidents(db: Session = Depends(get_db)):
+def list_incidents(repo: IncidentRepository = Depends(get_repo)):
     """GET /incidents -> supports frontend polling for the Overview page."""
-    return db.query(Incident).order_by(Incident.created_at.desc()).all()
+    return repo.list_all_ordered("created_at", -1)
 
 
 @router.get("/{incident_id}", response_model=IncidentOut)
 def get_incident(
     incident_id: str = Path(..., pattern=_INCIDENT_ID_PATTERN, min_length=1, max_length=32),
-    db: Session = Depends(get_db),
+    repo: IncidentRepository = Depends(get_repo),
 ):
-    row = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+    row = repo.get_by_incident_id(incident_id)
     if not row:
         raise HTTPException(status_code=404, detail="incident not found")
     return row
@@ -44,21 +47,14 @@ def get_incident(
 @router.get("/{incident_id}/activity", response_model=List[AuditLogOut])
 def get_incident_activity(
     incident_id: str = Path(..., pattern=_INCIDENT_ID_PATTERN, min_length=1, max_length=32),
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_mongo_db),
 ):
     """
     GET /incidents/{incident_id}/activity
     Returns the chronological audit log for this incident —
     the Agent Activity feed shown in the Incident Command Center (docs Section 14).
     """
-    incident = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+    incident = IncidentRepository(db).get_by_incident_id(incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="incident not found")
-
-    logs = (
-        db.query(AuditLog)
-        .filter(AuditLog.incident_id == incident_id)
-        .order_by(AuditLog.timestamp.asc())
-        .all()
-    )
-    return logs
+    return list(db["audit_logs"].find({"incident_id": incident_id}, {"_id": 0}).sort("timestamp", 1))

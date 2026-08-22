@@ -4,10 +4,10 @@ Owner: Developer 2 (Backend / Simulation)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_validator
+from pymongo.database import Database
 
-from app.database import get_db
+from app.mongo_database import get_mongo_db
 from app.schemas.common import IncidentOut
 from app.simulator.disruption_injector import inject_scenario, SCENARIO_DEFAULTS
 from app.middleware.security import require_api_key
@@ -24,7 +24,6 @@ class InjectRequest(BaseModel):
     @field_validator("scenario")
     @classmethod
     def validate_scenario(cls, v: str) -> str:
-        # Strip whitespace and null bytes
         v = v.strip().replace("\x00", "")
         if not v:
             raise ValueError("scenario must not be empty")
@@ -33,14 +32,14 @@ class InjectRequest(BaseModel):
         return v.upper()
 
     class Config:
-        extra = "forbid"  # Reject any unexpected JSON fields
+        extra = "forbid"
 
 
 @router.post("/inject", response_model=IncidentOut)
 def inject(
     req: InjectRequest,
     request: Request,
-    db: Session = Depends(get_db),
+    db: Database = Depends(get_mongo_db),
     _auth: None = Depends(require_api_key),
 ):
     """
@@ -48,7 +47,6 @@ def inject(
     Returns 422 if scenario name is unknown.
     Rate limited: 20 injections per 60 seconds per IP.
     """
-    # Rate limit: max 20 injections per minute per IP
     check_rate_limit(request, bucket="simulator_inject", max_calls=20, window_seconds=60)
 
     if req.scenario not in VALID_SCENARIOS:

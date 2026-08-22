@@ -15,31 +15,21 @@ IMPORTANT (team doc Section 14): action/result/reason must be safe, human-readab
 summaries — NEVER paste raw LLM chain-of-thought here.
 """
 
-from sqlalchemy.orm import Session
 from datetime import datetime
-
-from app.models.audit_logs import AuditLog
+from typing import Optional
+from pymongo.database import Database
 
 
 def log_event(
-    db: Session,
-    incident_id: str | None,
+    db: Database,
+    incident_id: Optional[str],
     action: str,
-    tool: str | None = None,
-    result: str | None = None,
-    decision: str | None = None,
-    reason: str | None = None,
-) -> AuditLog:
-    entry = AuditLog(
-        timestamp=datetime.utcnow(),
-        incident_id=incident_id,
-        action=action,
-        tool=tool,
-        result=result,
-        decision=decision,
-        reason=reason,
-    )
-    db.add(entry)
-    db.commit()
-    db.refresh(entry)
+    tool: Optional[str] = None,
+    result: Optional[str] = None,
+    decision: Optional[str] = None,
+    reason: Optional[str] = None,
+) -> dict:
+    entry = {"timestamp": datetime.utcnow(), "incident_id": incident_id, "action": action, "tool": tool, "result": result, "decision": decision, "reason": reason}
+    db["audit_logs"].insert_one(entry)
     return entry
+

@@ -12,17 +12,14 @@ DELIVERS: data feeding the SUPPLIER info card and contradiction-detection logic
           (team doc Section 19B: supplier says dispatched, tracking says no pickup scan)
 """
 
-from sqlalchemy.orm import Session
 from datetime import datetime
-
-from app.models.suppliers import Supplier
-from app.models.supplier_messages import SupplierMessage
+from pymongo.database import Database
 from app.schemas.tool_io import ToolResult
 from app.simulator.supplier_simulator import simulate_supplier_reply, simulate_tracking_status
 
 
-def get_supplier(supplier_id: str, db: Session) -> ToolResult:
-    row = db.query(Supplier).filter(Supplier.supplier_id == supplier_id).first()
+def get_supplier(supplier_id: str, db: Database) -> ToolResult:
+    row = db["suppliers"].find_one({"supplier_id": supplier_id}, {"_id": 0})
     if not row:
         return ToolResult(tool_name="get_supplier", success=False,
                            error="not found", summary=f"Supplier {supplier_id} not found.")
@@ -30,28 +27,26 @@ def get_supplier(supplier_id: str, db: Session) -> ToolResult:
         tool_name="get_supplier",
         success=True,
         data={
-            "supplier_id": row.supplier_id,
-            "name": row.name,
-            "quality_score": row.quality_score,
-            "reliability_score": row.reliability_score,
-            "certifications": row.certifications,
+            "supplier_id": row["supplier_id"], "name": row["name"],
+            "quality_score": row["quality_score"], "reliability_score": row["reliability_score"],
+            "certifications": row.get("certifications"),
         },
-        summary=f"Retrieved supplier profile for {row.name} ({row.supplier_id}).",
+        summary=f"Retrieved supplier profile for {row['name']} ({row['supplier_id']}).",
     )
 
 
-def send_supplier_message(supplier_id: str, po_id: str, message: str, db: Session) -> ToolResult:
+def send_supplier_message(supplier_id: str, po_id: str, message: str, db: Database) -> ToolResult:
     """
     Sends `message` to the simulated supplier and records both the outbound message
     and the simulated inbound reply in supplier_messages.
     """
     reply_text = simulate_supplier_reply(supplier_id, po_id, message)
 
-    outbound = SupplierMessage(supplier_id=supplier_id, po_id=po_id, message=message, timestamp=datetime.utcnow())
-    inbound = SupplierMessage(supplier_id=supplier_id, po_id=po_id, message=reply_text, timestamp=datetime.utcnow())
-    db.add(outbound)
-    db.add(inbound)
-    db.commit()
+    now = datetime.utcnow()
+    db["supplier_messages"].insert_many([
+        {"message_id": f"MSG-{datetime.utcnow().timestamp()}-out", "supplier_id": supplier_id, "po_id": po_id, "message": message, "timestamp": now},
+        {"message_id": f"MSG-{datetime.utcnow().timestamp()}-in", "supplier_id": supplier_id, "po_id": po_id, "message": reply_text, "timestamp": datetime.utcnow()},
+    ])
 
     return ToolResult(
         tool_name="send_supplier_message",
@@ -61,7 +56,7 @@ def send_supplier_message(supplier_id: str, po_id: str, message: str, db: Sessio
     )
 
 
-def get_tracking_status(po_id: str, db: Session) -> ToolResult:
+def get_tracking_status(po_id: str, db: Database) -> ToolResult:
     status = simulate_tracking_status(po_id)
     return ToolResult(
         tool_name="get_tracking_status",

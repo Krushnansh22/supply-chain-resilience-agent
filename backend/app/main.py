@@ -3,10 +3,16 @@ app/main.py
 Owner: Developer 2 (Backend / Simulation)
 
 FastAPI application entrypoint. Mounts every router from app/api/*, enables CORS
-for the React frontend, and initializes the SQLite DB + seed data on startup.
+for the React frontend, and initializes MongoDB + seed data on startup.
 
-RECEIVES: nothing (this is the process entrypoint)
-DELIVERS: the running HTTP API that Dev4's frontend and Dev1's agent both talk to.
+NOTE: LLM logic is handled entirely in the n8n workflow (Groq AI Agent node).
+This backend is a pure CRUD / data API — no LLM provider configured here.
+
+DELIVERS:
+  - Swagger UI at /docs — fastest API contract sanity-check for the full team
+  - /integrations/* — n8n-only endpoints (ERP event, delivery breach, supplier response, audit)
+  - /agent/* — agent state machine (trigger, approve, reject, state, plan)
+  - /incidents, /inventory, /suppliers, /production, /audit, /simulator — frontend + agent
 
 SECURITY LAYERS (all non-breaking):
   Layer 1 — RequestSizeLimitMiddleware : reject bodies > 64 KB (header + streaming check)
@@ -27,7 +33,10 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from app.config import settings
-from app.database import init_db
+from app.mongo_database import get_mongo_db, ping_mongo
+from seed_data.seed_data import run as seed_run
+from seed_data.broken_data import inject_broken_data
+
 from app.middleware.security import (
     SecurityHeadersMiddleware,
     SecurityEventLoggerMiddleware,
@@ -43,6 +52,7 @@ from app.api import (
     routes_audit,
     routes_agent,
     routes_simulator,
+    routes_integrations,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,7 +119,10 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.on_event("startup")
 def on_startup():
-    init_db()
+    ping_mongo()
+    db = get_mongo_db()
+    seed_run(db)
+    inject_broken_data(db)
 
 
 @app.get("/health")
@@ -126,3 +139,5 @@ app.include_router(routes_incidents.router, prefix="/incidents", tags=["Incident
 app.include_router(routes_audit.router, prefix="/audit", tags=["Audit"])
 app.include_router(routes_agent.router, prefix="/agent", tags=["Agent"])
 app.include_router(routes_simulator.router, prefix="/simulator", tags=["Simulator"])
+# --- n8n integration layer (called by n8n workflow, not frontend) ---
+app.include_router(routes_integrations.router, prefix="/integrations", tags=["N8N Integrations"])

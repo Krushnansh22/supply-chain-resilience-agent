@@ -46,6 +46,8 @@ frontend/package-lock.json
 .DS_Store
 Thumbs.db
 
+N8N/
+
 # ---- Docker ----
 *.pid
 

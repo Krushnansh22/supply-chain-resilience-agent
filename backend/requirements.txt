@@ -1,23 +1,20 @@
 # ==============================================================
 # backend/requirements.txt
-# Owner: Developer 2 (Backend / Simulation) — add deps here as needed,
-# communicate additions in the team channel so everyone rebuilds.
+# Owner: Developer 2 (Backend / Simulation)
+# NOTE: No LLM SDK needed here — all LLM calls are made inside the n8n
+#       Groq AI Agent node. This backend is a pure CRUD / data API.
 # ==============================================================
 
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
-sqlalchemy==2.0.35
+pymongo==4.9.0
 pydantic==2.9.2
 pydantic-settings==2.5.2
 python-dotenv==1.0.1
 httpx==0.27.2
 
-# LLM SDKs — keep whichever the team actually uses, others are cheap to leave in
-anthropic==0.34.2
-openai==1.51.0
-
-# OPTIONAL (Section 3 of team doc — do NOT make this mandatory)
-# ortools==9.10.4067
+# PDF report generation
+fpdf2==2.7.9
 
 # Testing
 pytest==8.3.3

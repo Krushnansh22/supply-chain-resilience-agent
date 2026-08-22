@@ -28,5 +28,27 @@ def is_below_safety_stock(usable_stock: int, safety_stock: int) -> bool:
     return usable_stock < safety_stock
 
 
-# TODO (Dev3): add compute_shortfall(required_qty, usable_stock) -> int
-# used by recovery_planner.py to know how many units must be sourced externally.
+def compute_shortfall(required_qty: int, usable_stock: int) -> int:
+    """
+    Returns the number of units that must be sourced externally.
+    If usable_stock covers the requirement, returns 0.
+    """
+    return max(0, required_qty - usable_stock)
+
+
+def compute_surplus(usable_stock: int, required_qty: int) -> int:
+    """
+    Returns the number of surplus units if usable_stock exceeds required_qty.
+    Useful for determining if partial sourcing is needed.
+    """
+    return max(0, usable_stock - required_qty)
+
+
+def compute_coverage_ratio(usable_stock: int, required_qty: int) -> float:
+    """
+    Returns the ratio of usable stock to required quantity (0.0 to 1.0+).
+    Values < 1.0 indicate shortfall; values >= 1.0 indicate full coverage.
+    """
+    if required_qty <= 0:
+        return float("inf") if usable_stock > 0 else 0.0
+    return round(usable_stock / required_qty, 4)

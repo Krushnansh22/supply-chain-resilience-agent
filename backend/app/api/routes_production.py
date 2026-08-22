@@ -4,10 +4,10 @@ Owner: Developer 2 (Backend / Simulation)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
-from app.database import get_db
-from app.models.production_orders import ProductionOrder
+from app.mongo_database import get_mongo_db
+from app.repositories.production_order_repository import ProductionOrderRepository
 from app.schemas.common import ProductionOrderOut
 
 router = APIRouter()
@@ -15,17 +15,21 @@ router = APIRouter()
 _PRODUCTION_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
+def get_repo(db: Database = Depends(get_mongo_db)):
+    return ProductionOrderRepository(db)
+
+
 @router.get("/", response_model=list[ProductionOrderOut])
-def list_production_orders(db: Session = Depends(get_db)):
-    return db.query(ProductionOrder).all()
+def list_production_orders(repo: ProductionOrderRepository = Depends(get_repo)):
+    return repo.list_all()
 
 
 @router.get("/{production_id}", response_model=ProductionOrderOut)
 def get_production_order(
     production_id: str = Path(..., pattern=_PRODUCTION_ID_PATTERN, min_length=1, max_length=32),
-    db: Session = Depends(get_db),
+    repo: ProductionOrderRepository = Depends(get_repo),
 ):
-    row = db.query(ProductionOrder).filter(ProductionOrder.production_id == production_id).first()
+    row = repo.get_by_production_id(production_id)
     if not row:
         raise HTTPException(status_code=404, detail="production order not found")
     return row

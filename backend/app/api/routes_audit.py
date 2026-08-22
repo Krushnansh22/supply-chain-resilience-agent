@@ -7,20 +7,22 @@ DELIVERS: chronological timeline to the frontend Audit page (docs Section 17)
 """
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from typing import Optional
+from pymongo.database import Database
 
-from app.database import get_db
-from app.models.audit_logs import AuditLog
+from app.mongo_database import get_mongo_db
+from app.repositories.audit_log_repository import AuditLogRepository
 from app.schemas.common import AuditLogOut
 
 router = APIRouter()
 
+def get_repo(db: Database = Depends(get_mongo_db)):
+    return AuditLogRepository(db)
+
 
 @router.get("/", response_model=list[AuditLogOut])
-def list_audit_logs(incident_id: Optional[str] = None, db: Session = Depends(get_db)):
+def list_audit_logs(incident_id: Optional[str] = None, repo: AuditLogRepository = Depends(get_repo)):
     """GET /audit?incident_id=INC-001 -> full or incident-scoped audit timeline."""
-    q = db.query(AuditLog).order_by(AuditLog.timestamp.asc())
     if incident_id:
-        q = q.filter(AuditLog.incident_id == incident_id)
-    return q.all()
+        return repo.get_by_incident_id(incident_id)
+    return repo.list_all()

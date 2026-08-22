@@ -16,16 +16,13 @@ DELIVERS:
 
 import uuid
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
+from pymongo.database import Database
 
 from app.schemas.tool_io import ToolResult
 from app.schemas.recovery_plan import RecoveryPlanOption
-from app.models.purchase_orders import PurchaseOrder
-from app.models.inventory import Inventory
-from app.models.incidents import Incident
 
 
-def update_erp(incident_id: str, option: RecoveryPlanOption, db: Session) -> ToolResult:
+def update_erp(incident_id: str, option: RecoveryPlanOption, db: Database) -> ToolResult:
     """
     Executes an approved recovery plan option:
     1. Creates a new PurchaseOrder row for each allocation.
@@ -38,31 +35,19 @@ def update_erp(incident_id: str, option: RecoveryPlanOption, db: Session) -> Too
         po_id = f"PO-{uuid.uuid4().hex[:6].upper()}"
         expected_delivery = datetime.utcnow() + timedelta(days=allocation.delivery_days)
 
-        po = PurchaseOrder(
-            po_id=po_id,
-            component_id=_get_component_for_incident(incident_id, db),
-            supplier_id=allocation.supplier_id,
-            quantity=allocation.quantity,
-            unit_price=allocation.unit_price,
-            expected_delivery=expected_delivery,
-            status="OPEN",
-        )
-        db.add(po)
+        component_id = _get_component_for_incident(incident_id, db)
+        db["purchase_orders"].insert_one({"po_id": po_id, "component_id": component_id, "supplier_id": allocation.supplier_id, "quantity": allocation.quantity, "unit_price": allocation.unit_price, "expected_delivery": expected_delivery, "status": "OPEN"})
         created_pos.append(po_id)
 
         # Reflect incoming stock commitment in usable_stock
-        inv = db.query(Inventory).filter(
-            Inventory.component_id == po.component_id
-        ).first()
+        inv = db["inventory"].find_one({"component_id": component_id})
         if inv:
-            inv.usable_stock += allocation.quantity
+            db["inventory"].update_one({"component_id": component_id}, {"$inc": {"usable_stock": allocation.quantity}})
 
     # Mark incident as RESOLVED
-    incident = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+    incident = db["incidents"].find_one({"incident_id": incident_id})
     if incident:
-        incident.status = "RESOLVED"
-
-    db.commit()
+        db["incidents"].update_one({"incident_id": incident_id}, {"$set": {"status": "RESOLVED"}})
 
     total_cost = option.total_cost
     return ToolResult(
@@ -82,9 +67,9 @@ def update_erp(incident_id: str, option: RecoveryPlanOption, db: Session) -> Too
     )
 
 
-def _get_component_for_incident(incident_id: str, db: Session) -> str:
+def _get_component_for_incident(incident_id: str, db: Database) -> str:
     """Helper: get the affected component from the incident row."""
-    incident = db.query(Incident).filter(Incident.incident_id == incident_id).first()
-    if incident and incident.affected_component:
-        return incident.affected_component
+    incident = db["incidents"].find_one({"incident_id": incident_id}, {"_id": 0})
+    if incident and incident.get("affected_component"):
+        return incident["affected_component"]
     return "UNKNOWN"
