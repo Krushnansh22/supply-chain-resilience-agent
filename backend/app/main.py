@@ -26,6 +26,7 @@ SECURITY LAYERS (all non-breaking):
   Layer 9 — API Key dependency         : opt-in via settings.API_KEY on mutating endpoints
 """
 
+from contextlib import asynccontextmanager
 import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,6 +58,16 @@ from app.api import (
 
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ping_mongo()
+    db = get_mongo_db()
+    seed_run(db)
+    inject_broken_data(db)
+    yield
+
+
 app = FastAPI(
     title="Supply Chain Disruption Control Agent",
     description="Autonomous incident triage & multi-modal re-routing engine (HOP 2026)",
@@ -64,6 +75,7 @@ app = FastAPI(
     docs_url="/docs" if settings.DOCS_ENABLED else None,
     redoc_url="/redoc" if settings.DOCS_ENABLED else None,
     openapi_url="/openapi.json" if settings.DOCS_ENABLED else None,
+    lifespan=lifespan,
 )
 
 # ── Layer 1: Request body size limit (64 KB, stream counting + header check) ─
@@ -115,14 +127,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={"detail": "Request validation failed.", "errors": safe_errors},
     )
-
-
-@app.on_event("startup")
-def on_startup():
-    ping_mongo()
-    db = get_mongo_db()
-    seed_run(db)
-    inject_broken_data(db)
 
 
 @app.get("/health")

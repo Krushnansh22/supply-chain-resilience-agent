@@ -8,7 +8,7 @@ REST surface for the `inventory` table. See docs/API_CONTRACTS.md for exact rout
 import math
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from pymongo.database import Database
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, ConfigDict, field_validator, Field
 
 from app.mongo_database import get_mongo_db
 from app.repositories.inventory_repository import InventoryRepository
@@ -54,6 +54,8 @@ def get_component(
 
 
 class AdjustRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     delta: int = Field(..., ge=-100_000, le=100_000, description="Stock delta — positive to add, negative to reduce")
     reason: str = Field(..., min_length=3, max_length=256, description="Human-readable reason for audit trail")
 
@@ -64,9 +66,6 @@ class AdjustRequest(BaseModel):
         if not v:
             raise ValueError("reason must not be blank")
         return v
-
-    class Config:
-        extra = "forbid"
 
 
 @router.post("/{component_id}/adjust", response_model=InventoryOut)

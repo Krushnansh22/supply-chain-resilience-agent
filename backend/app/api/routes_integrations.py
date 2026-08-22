@@ -26,10 +26,10 @@ SECURITY HARDENING:
 import csv
 import io
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List, Any
 from pymongo.database import Database
 
@@ -59,6 +59,8 @@ def verify_api_key(x_api_key: str = Header(default="")):
 # ---------------------------------------------------------------------------
 
 class ERPEventPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     event_id: Optional[str] = Field(None, max_length=64)
     event_type: str = Field(..., max_length=64)
     timestamp: Optional[str] = Field(None, max_length=64)
@@ -71,11 +73,10 @@ class ERPEventPayload(BaseModel):
     status: Optional[str] = Field(None, max_length=32)
     source: Optional[str] = Field("erp", max_length=32)
 
-    class Config:
-        extra = "ignore"
-
 
 class DeliveryBreachPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     event_type: str = Field("DELIVERY_COMMITMENT_BREACH", max_length=64)
     po_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
     supplier_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
@@ -84,11 +85,10 @@ class DeliveryBreachPayload(BaseModel):
     current_expected_date: Optional[str] = Field(None, max_length=64)
     delay_days: int = 0
 
-    class Config:
-        extra = "ignore"
-
 
 class SupplierResponsePayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     rfq_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
     supplier_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
     component_id: str = Field(..., max_length=32, pattern=_ID_PATTERN)
@@ -101,11 +101,10 @@ class SupplierResponsePayload(BaseModel):
     accepted: Optional[bool] = None
     timestamp: Optional[str] = Field(None, max_length=64)
 
-    class Config:
-        extra = "ignore"
-
 
 class AuditEventPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     event_id: Optional[str] = Field(None, max_length=64)
     timestamp: Optional[str] = Field(None, max_length=64)
     source: str = Field("n8n", max_length=64)
@@ -124,11 +123,10 @@ class AuditEventPayload(BaseModel):
     notification_status: Optional[str] = Field(None, max_length=64)
     erp_log_ref: Optional[str] = Field(None, max_length=64)
 
-    class Config:
-        extra = "ignore"
-
 
 class ERPLogPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     log_id: Optional[str] = Field(None, max_length=64)
     timestamp: Optional[str] = Field(None, max_length=64)
     action: str = Field(..., max_length=64)
@@ -140,9 +138,6 @@ class ERPLogPayload(BaseModel):
     status: str = Field("SUCCESS", max_length=32)
     correlation_id: Optional[str] = Field(None, max_length=64)
     error_details: Optional[str] = Field(None, max_length=1024)
-
-    class Config:
-        extra = "ignore"
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +157,7 @@ def erp_event(
     the incident_id so n8n can trigger the AI agent.
     """
     check_rate_limit(request, bucket="n8n_erp_event", max_calls=120, window_seconds=60)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Upsert purchase order
     po_doc = {
@@ -245,7 +240,7 @@ def delivery_breach(
     Creates a DELIVERY_COMMITMENT_BREACH incident and returns the incident_id.
     """
     check_rate_limit(request, bucket="n8n_breach", max_calls=60, window_seconds=60)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Check for existing open incident for this PO
     existing = db["incidents"].find_one(
@@ -297,7 +292,7 @@ def supplier_response(
     Upserts the RFQ response and returns any ranked options from existing recovery plans.
     """
     check_rate_limit(request, bucket="n8n_supplier_resp", max_calls=60, window_seconds=60)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     rfq_doc = {
         "rfq_id": payload.rfq_id,
@@ -345,7 +340,7 @@ def ingest_audit_event(
     Called by every workflow section as the final step. No HTTP self-loop.
     """
     check_rate_limit(request, bucket="n8n_audit", max_calls=120, window_seconds=60)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     event_id = payload.event_id or f"AUD-{int(now.timestamp() * 1000)}"
     entry = {
         "event_id": event_id,
@@ -398,7 +393,7 @@ def erp_log(
     Called after: PO creation, inventory updates, incident status changes.
     """
     check_rate_limit(request, bucket="n8n_erp_log", max_calls=120, window_seconds=60)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     log_id = payload.log_id or f"ERP-LOG-{int(now.timestamp() * 1000)}"
     entry = {
         "log_id": log_id,
@@ -523,9 +518,9 @@ def audit_report_pdf(
     title = f"Supply Chain Resilience Agent - Audit Trail Report"
     if incident_id:
         title += f" [{incident_id}]"
-    pdf.cell(0, 10, _to_latin1(title), ln=True, align="C")
+    pdf.cell(0, 10, _to_latin1(title), new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(0, 6, f"Generated: {datetime.utcnow().isoformat()} UTC  |  Total events: {len(logs)}", ln=True, align="C")
+    pdf.cell(0, 6, f"Generated: {datetime.now(timezone.utc).isoformat()} UTC  |  Total events: {len(logs)}", new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(4)
 
     # Table header
@@ -571,7 +566,7 @@ def audit_report_pdf(
     # Summary section
     pdf.ln(6)
     pdf.set_font("Helvetica", "B", 9)
-    pdf.cell(0, 8, "Summary Statistics", ln=True)
+    pdf.cell(0, 8, "Summary Statistics", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 8)
     statuses = {}
     workflows = {}
@@ -581,10 +576,10 @@ def audit_report_pdf(
         statuses[s] = statuses.get(s, 0) + 1
         workflows[w] = workflows.get(w, 0) + 1
     for k, v in sorted(statuses.items()):
-        pdf.cell(0, 5, f"  Status {k}: {v} events", ln=True)
+        pdf.cell(0, 5, f"  Status {k}: {v} events", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
     for k, v in sorted(workflows.items(), key=lambda x: -x[1]):
-        pdf.cell(0, 5, f"  Workflow {k}: {v} events", ln=True)
+        pdf.cell(0, 5, f"  Workflow {k}: {v} events", new_x="LMARGIN", new_y="NEXT")
 
     pdf_bytes = bytes(pdf.output())
     safe_suffix = f"_{incident_id}" if incident_id else ""

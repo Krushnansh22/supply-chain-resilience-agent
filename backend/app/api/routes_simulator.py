@@ -4,7 +4,7 @@ Owner: Developer 2 (Backend / Simulation)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -19,6 +19,8 @@ VALID_SCENARIOS = set(SCENARIO_DEFAULTS.keys())
 
 
 class InjectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     scenario: str
 
     @field_validator("scenario")
@@ -30,9 +32,6 @@ class InjectRequest(BaseModel):
         if len(v) > 64:
             raise ValueError("scenario name too long")
         return v.upper()
-
-    class Config:
-        extra = "forbid"
 
 
 @router.post("/inject", response_model=IncidentOut)

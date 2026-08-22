@@ -13,11 +13,11 @@ Populates MongoDB with comprehensive hero scenario data covering:
   - Pre-seeded audit logs for dashboard demo
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo.database import Database
 from app.repositories.inventory_repository import InventoryRepository
 
-NOW = datetime.utcnow()
+NOW = datetime.now(timezone.utc)
 
 
 def run(db: Database) -> None:

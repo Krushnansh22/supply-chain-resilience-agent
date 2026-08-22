@@ -19,7 +19,7 @@ SECURITY ADDITIONS (Dev2):
 """
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, ConfigDict, field_validator, Field
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -32,6 +32,8 @@ router = APIRouter()
 
 
 class TriggerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     incident_id: str = Field(..., min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
 
     @field_validator("incident_id")
@@ -39,11 +41,10 @@ class TriggerRequest(BaseModel):
     def sanitize_id(cls, v: str) -> str:
         return v.strip().replace("\x00", "")
 
-    class Config:
-        extra = "forbid"
-
 
 class ApprovalDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     incident_id: str = Field(..., min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
     approver: str = Field(default="human-coordinator", min_length=1, max_length=64)
 
@@ -51,9 +52,6 @@ class ApprovalDecision(BaseModel):
     @classmethod
     def sanitize_fields(cls, v: str) -> str:
         return v.strip().replace("\x00", "")
-
-    class Config:
-        extra = "forbid"
 
 
 @router.post("/trigger")

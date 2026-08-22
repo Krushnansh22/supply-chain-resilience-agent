@@ -8,12 +8,14 @@ so nobody's local branch silently diverges. This file mirrors docs/API_CONTRACTS
 keep them in sync.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from datetime import datetime
 
 
 class InventoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     component_id: str
     current_stock: int
     usable_stock: int
@@ -21,22 +23,20 @@ class InventoryOut(BaseModel):
     safety_stock: int
     days_of_supply: Optional[float] = None  # computed field, filled by decision_engine
 
-    class Config:
-        from_attributes = True
-
 
 class SupplierOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     supplier_id: str
     name: str
     quality_score: float
     reliability_score: float
     certifications: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class ProductionOrderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     production_id: str
     product: str
     component_id: str
@@ -46,11 +46,10 @@ class ProductionOrderOut(BaseModel):
     priority: str
     status: str
 
-    class Config:
-        from_attributes = True
-
 
 class IncidentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     incident_id: str
     type: str
     severity: str
@@ -59,11 +58,10 @@ class IncidentOut(BaseModel):
     status: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     timestamp: datetime
     incident_id: Optional[str] = None
     action: str
@@ -72,16 +70,12 @@ class AuditLogOut(BaseModel):
     decision: Optional[str] = None
     reason: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class SupplierMessageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     message_id: str
     supplier_id: str
     po_id: Optional[str] = None
     message: str
     timestamp: datetime
-
-    class Config:
-        from_attributes = True
