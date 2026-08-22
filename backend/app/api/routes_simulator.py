@@ -1,24 +1,17 @@
 """
 app/api/routes_simulator.py
 Owner: Developer 2 (Backend / Simulation)
-
-Powers the "Disruption Simulator" buttons (team doc Section 18):
-[Inject Supplier Delay] [Inject Stale Inventory] [Inject Supplier Lie]
-[Inject Quality Failure] [Inject Budget Overrun] [Inject New Disruption]
-
-RECEIVES: button clicks from frontend/src/components/simulator/DisruptionSimulatorPanel.jsx
-DELIVERS: creates a row in `incidents` (and any supporting fake data, e.g. a supplier
-          message that contradicts tracking for the "lie" scenario) via
-          simulator/disruption_injector.py
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.database import get_db
 from app.schemas.common import IncidentOut
 from app.simulator.disruption_injector import inject_scenario, SCENARIO_DEFAULTS
+from app.middleware.security import require_api_key
+from app.middleware.rate_limiter import check_rate_limit
 
 router = APIRouter()
 
@@ -26,14 +19,38 @@ VALID_SCENARIOS = set(SCENARIO_DEFAULTS.keys())
 
 
 class InjectRequest(BaseModel):
-    scenario: str  # "SUPPLIER_DELAY" | "STALE_INVENTORY" | "SUPPLIER_LIE" | "QUALITY_FAILURE" | "BUDGET_OVERRUN"
+    scenario: str
+
+    @field_validator("scenario")
+    @classmethod
+    def validate_scenario(cls, v: str) -> str:
+        # Strip whitespace and null bytes
+        v = v.strip().replace("\x00", "")
+        if not v:
+            raise ValueError("scenario must not be empty")
+        if len(v) > 64:
+            raise ValueError("scenario name too long")
+        return v.upper()
+
+    class Config:
+        extra = "forbid"  # Reject any unexpected JSON fields
 
 
 @router.post("/inject", response_model=IncidentOut)
-def inject(req: InjectRequest, db: Session = Depends(get_db)):
-    """POST /simulator/inject {"scenario": "SUPPLIER_DELAY"} -> creates a new incident.
-    Returns 422 if scenario name is unknown.
+def inject(
+    req: InjectRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    _auth: None = Depends(require_api_key),
+):
     """
+    POST /simulator/inject {"scenario": "SUPPLIER_DELAY"} -> creates a new incident.
+    Returns 422 if scenario name is unknown.
+    Rate limited: 20 injections per 60 seconds per IP.
+    """
+    # Rate limit: max 20 injections per minute per IP
+    check_rate_limit(request, bucket="simulator_inject", max_calls=20, window_seconds=60)
+
     if req.scenario not in VALID_SCENARIOS:
         raise HTTPException(
             status_code=422,

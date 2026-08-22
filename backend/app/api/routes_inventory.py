@@ -3,26 +3,23 @@ app/api/routes_inventory.py
 Owner: Developer 2 (Backend / Simulation)
 
 REST surface for the `inventory` table. See docs/API_CONTRACTS.md for exact routes.
-
-RECEIVES: DB session via get_db()
-DELIVERS: JSON consumed by (a) frontend Inventory page (Dev4) and
-          (b) indirectly by tools/inventory_tools.py which the agent calls.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, Field
 
 from app.database import get_db
 from app.models.inventory import Inventory
 from app.schemas.common import InventoryOut
 from app.decision_engine.inventory_calc import compute_days_of_supply
+from app.middleware.security import require_api_key
+from app.middleware.rate_limiter import check_rate_limit
 
 router = APIRouter()
 
-# Regex enforced on all component_id path parameters.
-# Only alphanumerics and hyphens allowed — blocks path traversal, null bytes, SQL injection.
-_COMPONENT_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
+# Only alphanumerics and hyphens — blocks path traversal, null bytes, SQL injection.
+_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
 @router.get("/", response_model=list[InventoryOut])
@@ -39,7 +36,7 @@ def list_inventory(db: Session = Depends(get_db)):
 
 @router.get("/{component_id}", response_model=InventoryOut)
 def get_component(
-    component_id: str = Path(..., pattern=_COMPONENT_ID_PATTERN, min_length=1, max_length=32),
+    component_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     db: Session = Depends(get_db),
 ):
     """GET /inventory/{component_id}"""
@@ -52,25 +49,36 @@ def get_component(
 
 
 class AdjustRequest(BaseModel):
-    delta: int              # positive = add stock, negative = remove stock
-    reason: str             # human-readable reason for audit trail
+    delta: int = Field(..., ge=-100_000, le=100_000, description="Stock delta — positive to add, negative to reduce")
+    reason: str = Field(..., min_length=3, max_length=256, description="Human-readable reason for audit trail")
+
+    @field_validator("reason")
+    @classmethod
+    def sanitize_reason(cls, v: str) -> str:
+        # Strip leading/trailing whitespace and null bytes
+        v = v.strip().replace("\x00", "")
+        if not v:
+            raise ValueError("reason must not be blank")
+        return v
 
     class Config:
-        # Prevent extra fields from being injected
         extra = "forbid"
 
 
 @router.post("/{component_id}/adjust", response_model=InventoryOut)
 def adjust_inventory(
-    component_id: str = Path(..., pattern=_COMPONENT_ID_PATTERN, min_length=1, max_length=32),
+    request: Request,
+    component_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     req: AdjustRequest = ...,
     db: Session = Depends(get_db),
+    _auth: None = Depends(require_api_key),
 ):
     """
     POST /inventory/{component_id}/adjust
-    Adjusts usable_stock by delta (positive = add, negative = reduce).
-    Used by update_erp tool and convenience endpoints.
+    Adjusts usable_stock by delta. Rate limited: 30/min per IP.
     """
+    check_rate_limit(request, bucket="inventory_adjust", max_calls=30, window_seconds=60)
+
     row = db.query(Inventory).filter(Inventory.component_id == component_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="component not found")
