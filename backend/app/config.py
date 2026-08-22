@@ -5,48 +5,75 @@ Owner: Developer 2 (Backend / Simulation)
 Centralized settings object. Every other module should import `settings` from here
 instead of calling os.getenv() directly.
 
-NOTE: LLM logic is handled entirely in the n8n workflow (Groq AI Agent node).
-      The backend is a pure CRUD / data API — no LLM keys here.
+SETTINGS GROUPS:
+  - Database (MongoDB Atlas)
+  - n8n Integration (URLs, shared API key)
+  - Groq LLM (provider, model, temperature — served to n8n via /api/v1/config/n8n)
+  - Email Notifications (from/to addresses — served to n8n via /api/v1/config/n8n)
+  - Business Logic (autonomous approval limit)
+  - CORS / Security / Observability
 
-RECEIVES: values from backend/.env
-DELIVERS: a singleton `settings` instance used by database.py, api/, etc.
+RECEIVES: values from .env (root) or backend/.env
+DELIVERS: a singleton `settings` instance used by database.py, api/, routers/, etc.
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # --- Database (MongoDB Atlas) ---
+    # ── Database (MongoDB Atlas) ───────────────────────────────────────────────
     MONGO_URI: str = "mongodb://127.0.0.1:27017"
     MONGO_DB_NAME: str = "supplychaindb"
 
-    # --- N8N Integration ---
+    # ── FastAPI Host / Port ────────────────────────────────────────────────────
+    BACKEND_HOST: str = "0.0.0.0"
+    BACKEND_PORT: int = 8000
+    # URL that n8n uses to reach the backend inside the Docker network.
+    # Set to http://backend:8000 in production; http://localhost:8000 for local dev.
+    BACKEND_URL: str = "http://backend:8000"
+
+    # ── n8n Integration ────────────────────────────────────────────────────────
     N8N_BASE_URL: str = "http://localhost:5678"
+    # Shared secret for n8n ↔ backend authentication (X-API-Key header).
     BACKEND_API_KEY: str = "changeme-secret-key"
 
-    # --- Business rules (REQUIRED: >$50,000 impact => human approval) ---
+    # ── Business Logic ─────────────────────────────────────────────────────────
+    # Recovery plans costing MORE than this (USD) require human approval.
     AUTONOMOUS_APPROVAL_LIMIT_USD: float = 50000.0
 
-    # --- CORS ---
+    # ── Email Notifications ────────────────────────────────────────────────────
+    # Served to n8n via GET /api/v1/config/n8n so email addresses are not
+    # hard-coded inside workflow node parameters.
+    NOTIFY_FROM_EMAIL: str = ""
+    APPROVAL_NOTIFY_EMAIL: str = ""
+    OPS_ALERT_EMAIL: str = ""
+
+    # ── Groq AI — Post-Analysis LLM Layer ─────────────────────────────────────
+    # These are served to n8n via GET /api/v1/config/n8n.
+    # GROQ_API_KEY must ALSO be configured as an n8n Credential (Groq API node).
+    LLM_PROVIDER: str = "groq"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    GROQ_TEMPERATURE: float = 0.1
+
+    # ── CORS ───────────────────────────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:5173"
     CORS_ALLOWED_METHODS: str = "GET,POST,OPTIONS"
 
-    # --- Security ---
-    # Optional API key for protecting mutating endpoints.
-    # If empty (default), all endpoints are open (safe for local dev & hackathon demos).
-    # Set API_KEY=your-secret in .env to enforce authentication.
+    # ── Security ───────────────────────────────────────────────────────────────
+    # Legacy API_KEY: used as fallback by routes_integrations.verify_api_key.
+    # Prefer BACKEND_API_KEY for all new endpoints.
     API_KEY: str = ""
 
-    # Controls whether interactive Swagger UI /docs and openapi.json are publicly accessible
+    # Controls whether Swagger UI (/docs) and /openapi.json are publicly accessible.
     DOCS_ENABLED: bool = True
 
-    # --- Rate Limiting & Proxy Configuration ---
-    # Comma-separated list of trusted reverse proxy IPs (e.g. "127.0.0.1,10.0.0.1").
-    # Empty by default (X-Forwarded-For is IGNORED unless direct peer IP is in this list).
+    # ── Rate Limiting & Proxy ──────────────────────────────────────────────────
+    # Comma-separated trusted reverse-proxy IPs (X-Forwarded-For ignored otherwise).
     TRUSTED_PROXY_IPS: str = ""
     GENERAL_RATE_LIMIT_MAX: int = 60
     GENERAL_RATE_LIMIT_WINDOW: int = 60
 
-    # --- Misc ---
+    # ── Misc ───────────────────────────────────────────────────────────────────
     LOG_LEVEL: str = "INFO"
 
     model_config = SettingsConfigDict(

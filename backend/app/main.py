@@ -56,6 +56,7 @@ from app.api import (
     routes_simulator,
     routes_integrations,
 )
+from app.routers import config as config_router
 
 logger = logging.getLogger(__name__)
 
@@ -152,3 +153,5 @@ app.include_router(routes_agent.router, prefix="/agent", tags=["Agent"])
 app.include_router(routes_simulator.router, prefix="/simulator", tags=["Simulator"])
 # --- n8n integration layer (called by n8n workflow, not frontend) ---
 app.include_router(routes_integrations.router, prefix="/integrations", tags=["N8N Integrations"])
+# --- Config endpoint: serves runtime config to n8n at incident lifecycle start ---
+app.include_router(config_router.router, prefix="/api/v1/config", tags=["Config"])
