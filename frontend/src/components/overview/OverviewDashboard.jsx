@@ -2,24 +2,24 @@
  * src/components/overview/OverviewDashboard.jsx
  * Owner: Developer 4 (Frontend)
  *
- * First screen judges see (team doc Section 12). Composes:
- *   - KpiCards (active/critical incidents, production-at-risk, pending approvals)
- *   - ActiveIncidentsList (clickable -> IncidentCommandCenter)
- *   - AgentActivityFeed (recent audit log entries across all incidents)
+ * Exact visual match to the reference dashboard screenshot:
+ *  - 4 KPI Stat Cards (Current balance, Income, Expence, Nearest delivery)
+ *  - Middle Section: Warehouse workload (Pie Chart with callouts) + Warehouse workload (Line Chart)
+ *  - Bottom Section: Accepted deliveries data table
  *
- * RECEIVES: GET /incidents, GET /production, GET /audit
- *   (via src/api/incidents.js, src/api/production.js, src/api/audit.js)
- * DELIVERS: nothing further downstream — this is a leaf page
+ * All backend API interactions & polling are preserved.
  */
+
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { listIncidents } from "../../api/incidents.js";
 import { listAuditLogs } from "../../api/audit.js";
 import { listProductionOrders } from "../../api/production.js";
 import { listSuppliers } from "../../api/suppliers.js";
+
 import KpiCards from "./KpiCards.jsx";
-import ActiveIncidentsList from "./ActiveIncidentsList.jsx";
-import AgentActivityFeed from "./AgentActivityFeed.jsx";
+import WarehousePieChart from "./WarehousePieChart.jsx";
+import WarehouseLineChart from "./WarehouseLineChart.jsx";
+import AcceptedDeliveriesTable from "./AcceptedDeliveriesTable.jsx";
 
 export default function OverviewDashboard() {
   const [incidents, setIncidents] = useState([]);
@@ -29,7 +29,12 @@ export default function OverviewDashboard() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
-    Promise.all([listIncidents(), listAuditLogs(), listProductionOrders(), listSuppliers()])
+    Promise.all([
+      listIncidents(),
+      listAuditLogs(),
+      listProductionOrders(),
+      listSuppliers(),
+    ])
       .then(([incidentsRes, auditRes, productionRes, suppliersRes]) => {
         setIncidents(incidentsRes);
         setAuditLogs(auditRes);
@@ -42,35 +47,41 @@ export default function OverviewDashboard() {
 
   useEffect(() => {
     load();
-    // Light polling so the control tower reflects the agent loop live during
-    // a demo without requiring a manual refresh between simulator clicks.
-    const interval = setInterval(load, 2000);
+    const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, [load]);
 
-  if (loading) return <p>Loading control tower…</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: "40px 0", color: "var(--text-muted)", fontSize: 14, fontFamily: "var(--font-display)" }}>
+        Loading dashboard...
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>Control Tower</h1>
-          <div className="page-subtitle">Live view of active supply-chain disruptions and agent decisions.</div>
-        </div>
-        <Link to="/simulator" className="btn btn-black" style={{ textDecoration: "none" }}>
-          ⚡ Simulate Disruption
-        </Link>
+      {/* ── Row 1: 4 KPI Cards ── */}
+      <KpiCards
+        incidents={incidents}
+        productionOrders={productionOrders}
+        suppliers={suppliers}
+      />
+
+      {/* ── Row 2: Two Middle Charts ── */}
+      <div className="middle-charts-grid">
+        {/* Left: Warehouse Workload Pie Chart */}
+        <WarehousePieChart />
+
+        {/* Right: Warehouse Workload Multi-Line Chart */}
+        <WarehouseLineChart />
       </div>
 
-      <KpiCards incidents={incidents} productionOrders={productionOrders} suppliers={suppliers} />
-      <div style={{ display: "flex", gap: 16, marginTop: 24, flexWrap: "wrap" }}>
-        <div style={{ flex: 2, minWidth: 320 }}>
-          <ActiveIncidentsList incidents={incidents} />
-        </div>
-        <div style={{ flex: 1, minWidth: 260 }}>
-          <AgentActivityFeed auditLogs={auditLogs} />
-        </div>
-      </div>
+      {/* ── Row 3: Accepted Deliveries Table ── */}
+      <AcceptedDeliveriesTable
+        incidents={incidents}
+        productionOrders={productionOrders}
+      />
     </div>
   );
 }
