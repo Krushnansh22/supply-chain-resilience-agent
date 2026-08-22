@@ -55,4 +55,4 @@ def inject(
             detail=f"Unknown scenario '{req.scenario}'. Valid options: {sorted(VALID_SCENARIOS)}",
         )
     incident = inject_scenario(req.scenario, db)
-    return IncidentOut.model_validate(incident)
+    return IncidentOut(**{k: v for k, v in incident.items() if k != "_id"})
