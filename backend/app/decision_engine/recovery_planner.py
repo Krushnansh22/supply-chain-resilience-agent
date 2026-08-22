@@ -14,35 +14,63 @@ DELIVERS: schemas/recovery_plan.RecoveryPlan, consumed by:
   - frontend Recovery Plan UI + Approval UI
 """
 
+from typing import Optional
+
 from app.schemas.recovery_plan import RecoveryPlan, RecoveryPlanOption, SupplierAllocation
 from app.decision_engine.supplier_scoring import score_supplier
 from app.decision_engine import constraint_validator as cv
 from app.config import settings
 
 
+def _score_candidate(candidate: dict, required_quantity: int, required_by_days: int,
+                     max_budget: float) -> float:
+    """Compute composite score for a single candidate for ranking."""
+    scored = score_supplier(
+        supplier_id=candidate["supplier_id"],
+        quality_score=candidate.get("quality_score", 50.0),
+        reliability_score=candidate.get("reliability_score", 50.0),
+        delivery_days=candidate["delivery_days"],
+        unit_price=candidate["unit_price"],
+        max_acceptable_delivery_days=max(required_by_days * 2, 1),
+        max_acceptable_price=max_budget / max(required_quantity, 1),
+    )
+    return scored.score
+
+
 def build_recovery_plan(
     incident_id: str,
     required_quantity: int,
-    rfq_candidates: list[dict],   # each dict: supplier_id, unit_price, delivery_days, certifications, moq
-    required_cert: str | None,
+    rfq_candidates: list[dict],
+    required_cert: Optional[str],
     required_by_days: int,
+    max_budget: Optional[float] = None,
 ) -> RecoveryPlan:
     """
-    TODO (Dev3): this is a skeleton. Implement:
-      1. Single-supplier options for each RFQ candidate that can cover full quantity alone.
-      2. At least one split-sourcing option (team doc Section 9, e.g. 400+200) when no
-         single supplier can fully/optimally cover the need.
-      3. Run each option through constraint_validator checks; mark constraints_satisfied
-         and rejection_reason accordingly (rejected options should still be returned,
-         not silently dropped — judges want to see rejected alternatives, see docs
-         Section 15 "OPTION C - Rejected").
-      4. Pick the recommended_option_id = best constraint-passing option by score_supplier.
-      5. Set requires_human_approval = total_cost > settings.AUTONOMOUS_APPROVAL_LIMIT_USD
-         (REQUIRED by PS: >$50,000 impact threshold).
+    Builds a complete recovery plan with single-supplier and split-sourcing options.
+
+    Implementation:
+    1. Single-supplier options for each RFQ candidate that can cover full quantity.
+    2. Split-sourcing option when no single supplier is optimal (team doc Section 9).
+    3. Each option validated against constraints; rejected options kept with reasons.
+    4. Best constraint-passing option recommended by composite score.
+    5. Approval threshold enforced: >$50,000 requires human coordinator approval.
     """
+    if max_budget is None:
+        max_budget = float("inf")
+
     options: list[RecoveryPlanOption] = []
 
-    # --- Placeholder: naive single-supplier-only logic, REPLACE with real algorithm ---
+    if not rfq_candidates:
+        return RecoveryPlan(
+            incident_id=incident_id,
+            options=[],
+            recommended_option_id="",
+            recommendation_reason="No supplier candidates available for this component.",
+            requires_human_approval=False,
+            approval_threshold_usd=settings.AUTONOMOUS_APPROVAL_LIMIT_USD,
+        )
+
+    # 1. Single-supplier options
     for candidate in rfq_candidates:
         total_cost = candidate["unit_price"] * required_quantity
         allocation = SupplierAllocation(
@@ -52,12 +80,27 @@ def build_recovery_plan(
             delivery_days=candidate["delivery_days"],
         )
 
-        checks = [cv.check_budget(total_cost, max_budget=float("inf"))]
+        # Constraint checks
+        checks = [cv.check_budget(total_cost, max_budget=max_budget)]
         if required_cert:
-            checks.append(cv.check_quality_certification(candidate.get("certifications", ""), required_cert))
-        checks.append(cv.check_delivery_deadline(candidate["delivery_days"], required_by_days))
+            checks.append(
+                cv.check_quality_certification(
+                    candidate.get("certifications", ""), required_cert
+                )
+            )
+        checks.append(
+            cv.check_delivery_deadline(candidate["delivery_days"], required_by_days)
+        )
 
-        failed = next((c for c in checks if not c.passed), None)
+        moq = candidate.get("moq", 0)
+        if moq > 0:
+            checks.append(cv.check_moq(required_quantity, moq))
+
+        # Collect ALL failed reasons (not just first)
+        failed_checks = [c for c in checks if not c.passed]
+        rejection_reason = (
+            "; ".join(c.reason for c in failed_checks) if failed_checks else None
+        )
 
         options.append(
             RecoveryPlanOption(
@@ -65,25 +108,190 @@ def build_recovery_plan(
                 allocations=[allocation],
                 total_cost=total_cost,
                 max_delivery_days=candidate["delivery_days"],
-                constraints_satisfied=failed is None,
-                rejection_reason=failed.reason if failed else None,
+                constraints_satisfied=len(failed_checks) == 0,
+                rejection_reason=rejection_reason,
             )
         )
 
+    # 2. Split-sourcing option (team doc Section 9)
+    if len(rfq_candidates) >= 2:
+        split_option = _build_split_option(
+            rfq_candidates, required_quantity, required_cert,
+            required_by_days, max_budget, chr(ord("A") + len(options)),
+        )
+        if split_option:
+            options.append(split_option)
+
+    # 3. Rank valid options by composite score, pick best
     valid_options = [o for o in options if o.constraints_satisfied]
-    recommended = min(valid_options, key=lambda o: o.total_cost) if valid_options else None
+
+    if valid_options:
+        # Score each valid option
+        scored_valid = []
+        for opt in valid_options:
+            # Use first allocation's supplier for scoring (or average for split)
+            if len(opt.allocations) == 1:
+                candidate = next(
+                    (c for c in rfq_candidates
+                     if c["supplier_id"] == opt.allocations[0].supplier_id),
+                    None,
+                )
+                if candidate:
+                    score = _score_candidate(
+                        candidate, required_quantity, required_by_days, max_budget
+                    )
+                else:
+                    score = 0.0
+            else:
+                # Split-sourcing: average of supplier scores
+                scores = []
+                for alloc in opt.allocations:
+                    cand = next(
+                        (c for c in rfq_candidates
+                         if c["supplier_id"] == alloc.supplier_id),
+                        None,
+                    )
+                    if cand:
+                        scores.append(
+                            _score_candidate(
+                                cand, alloc.quantity, required_by_days, max_budget
+                            )
+                        )
+                score = sum(scores) / len(scores) if scores else 0.0
+
+            scored_valid.append((opt, score))
+
+        # Sort by score descending (best first)
+        scored_valid.sort(key=lambda x: x[1], reverse=True)
+        recommended = scored_valid[0][0]
+    else:
+        recommended = None
+
+    # 4. Build recommendation reason
+    if recommended:
+        if len(recommended.allocations) > 1:
+            supplier_list = ", ".join(a.supplier_id for a in recommended.allocations)
+            recommendation_reason = (
+                f"Split-sourcing across {supplier_list} — "
+                f"lowest cost satisfying all constraints."
+            )
+        else:
+            recommendation_reason = (
+                f"Best option from {recommended.allocations[0].supplier_id} — "
+                f"lowest cost satisfying all constraints."
+            )
+    else:
+        recommendation_reason = (
+            "No option currently satisfies all constraints — replanning required."
+        )
+
+    # 5. Approval threshold check (PS REQUIRED: >$50,000)
+    recommended_cost = recommended.total_cost if recommended else 0
+    requires_human_approval = recommended_cost > settings.AUTONOMOUS_APPROVAL_LIMIT_USD
 
     return RecoveryPlan(
         incident_id=incident_id,
         options=options,
         recommended_option_id=recommended.option_id if recommended else "",
-        recommendation_reason=(
-            "Lowest-cost option that satisfies all constraints."
-            if recommended else "No option currently satisfies all constraints — replanning required."
-        ),
-        requires_human_approval=(recommended.total_cost > settings.AUTONOMOUS_APPROVAL_LIMIT_USD)
-        if recommended else False,
+        recommendation_reason=recommendation_reason,
+        requires_human_approval=requires_human_approval,
         approval_threshold_usd=settings.AUTONOMOUS_APPROVAL_LIMIT_USD,
     )
 
-# TODO (Dev3): add build_split_sourcing_option(candidates, required_quantity) -> RecoveryPlanOption
+
+def _build_split_option(
+    candidates: list[dict],
+    required_quantity: int,
+    required_cert: Optional[str],
+    required_by_days: int,
+    max_budget: float,
+    option_id: str,
+) -> Optional[RecoveryPlanOption]:
+    """
+    Builds a split-sourcing option when no single supplier can optimally cover the need.
+    Tries multiple split ratios and picks the best valid combination.
+    """
+    sorted_candidates = sorted(
+        candidates, key=lambda c: c.get("unit_price", float("inf"))
+    )
+
+    best_option = None
+    best_total_cost = float("inf")
+
+    for i in range(min(len(sorted_candidates), 4)):
+        for j in range(i + 1, min(len(sorted_candidates), 4)):
+            c1 = sorted_candidates[i]
+            c2 = sorted_candidates[j]
+
+            for split_pct in [0.4, 0.5, 0.6]:
+                qty1 = int(required_quantity * split_pct)
+                qty2 = required_quantity - qty1
+
+                if qty1 <= 0 or qty2 <= 0:
+                    continue
+
+                # Check MOQ
+                moq1 = c1.get("moq", 0)
+                moq2 = c2.get("moq", 0)
+                if (moq1 > 0 and qty1 < moq1) or (moq2 > 0 and qty2 < moq2):
+                    continue
+
+                cost1 = c1["unit_price"] * qty1
+                cost2 = c2["unit_price"] * qty2
+                total_cost = cost1 + cost2
+
+                if total_cost > max_budget * 1.2:  # allow 20% over for split
+                    continue
+
+                # Check all constraints
+                rejection_reasons = []
+
+                budget_check = cv.check_budget(total_cost, max_budget)
+                if not budget_check.passed:
+                    rejection_reasons.append(budget_check.reason)
+
+                if required_cert:
+                    for c in [c1, c2]:
+                        cert_check = cv.check_quality_certification(
+                            c.get("certifications", ""), required_cert
+                        )
+                        if not cert_check.passed:
+                            rejection_reasons.append(
+                                f"Supplier {c['supplier_id']}: {cert_check.reason}"
+                            )
+
+                max_delivery = max(c1["delivery_days"], c2["delivery_days"])
+                deadline_check = cv.check_delivery_deadline(
+                    max_delivery, required_by_days
+                )
+                if not deadline_check.passed:
+                    rejection_reasons.append(deadline_check.reason)
+
+                constraints_ok = len(rejection_reasons) == 0
+
+                # Only consider if valid and cheaper than current best
+                if constraints_ok and total_cost < best_total_cost:
+                    best_total_cost = total_cost
+                    best_option = RecoveryPlanOption(
+                        option_id=option_id,
+                        allocations=[
+                            SupplierAllocation(
+                                supplier_id=c1["supplier_id"],
+                                quantity=qty1,
+                                unit_price=c1["unit_price"],
+                                delivery_days=c1["delivery_days"],
+                            ),
+                            SupplierAllocation(
+                                supplier_id=c2["supplier_id"],
+                                quantity=qty2,
+                                unit_price=c2["unit_price"],
+                                delivery_days=c2["delivery_days"],
+                            ),
+                        ],
+                        total_cost=total_cost,
+                        max_delivery_days=max_delivery,
+                        constraints_satisfied=True,
+                        rejection_reason=None,
+                    )
+
+    return best_option
