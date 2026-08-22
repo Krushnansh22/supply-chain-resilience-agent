@@ -18,7 +18,7 @@ SECURITY ADDITIONS (Dev2):
   - Input validators on TriggerRequest and ApprovalDecision
 """
 
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from pydantic import BaseModel, ConfigDict, field_validator, Field
 from datetime import datetime, timezone
 from pymongo.database import Database
@@ -114,7 +114,7 @@ def approve_plan(
     check_rate_limit(request, bucket="agent_approve", max_calls=10, window_seconds=60)
     incident = db["incidents"].find_one({"incident_id": decision.incident_id}, {"_id": 0})
     if not incident:
-        return {"error": "incident not found"}
+        raise HTTPException(status_code=404, detail="incident not found")
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.EXECUTING.value}})
     db["agent_sessions"].update_one(
         {"incident_id": decision.incident_id},
@@ -139,7 +139,7 @@ def reject_plan(
     check_rate_limit(request, bucket="agent_reject", max_calls=10, window_seconds=60)
     incident = db["incidents"].find_one({"incident_id": decision.incident_id}, {"_id": 0})
     if not incident:
-        return {"error": "incident not found"}
+        raise HTTPException(status_code=404, detail="incident not found")
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.REPLANNING.value}})
     db["agent_sessions"].update_one(
         {"incident_id": decision.incident_id},

@@ -115,8 +115,8 @@ class AuditEventPayload(BaseModel):
     entity_id: Optional[str] = Field(None, max_length=64)
     action: Optional[str] = Field(None, max_length=128)
     status: str = Field("SUCCESS", max_length=32)
-    input: Optional[dict] = {}
-    output: Optional[dict] = {}
+    input: Optional[dict] = Field(default_factory=dict)
+    output: Optional[dict] = Field(default_factory=dict)
     correlation_id: Optional[str] = Field(None, max_length=64)
     retry_count: int = 0
     error_details: Optional[str] = Field(None, max_length=1024)
@@ -134,7 +134,7 @@ class ERPLogPayload(BaseModel):
     entity_id: str = Field(..., max_length=64)
     incident_id: Optional[str] = Field(None, max_length=64)
     performed_by: str = Field("n8n", max_length=64)
-    details: Optional[dict] = {}
+    details: Optional[dict] = Field(default_factory=dict)
     status: str = Field("SUCCESS", max_length=32)
     correlation_id: Optional[str] = Field(None, max_length=64)
     error_details: Optional[str] = Field(None, max_length=1024)

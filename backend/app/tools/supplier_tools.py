@@ -12,7 +12,7 @@ DELIVERS: data feeding the SUPPLIER info card and contradiction-detection logic
           (team doc Section 19B: supplier says dispatched, tracking says no pickup scan)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo.database import Database
 from app.schemas.tool_io import ToolResult
 from app.simulator.supplier_simulator import simulate_supplier_reply, simulate_tracking_status
@@ -27,11 +27,13 @@ def get_supplier(supplier_id: str, db: Database) -> ToolResult:
         tool_name="get_supplier",
         success=True,
         data={
-            "supplier_id": row["supplier_id"], "name": row["name"],
-            "quality_score": row["quality_score"], "reliability_score": row["reliability_score"],
+            "supplier_id": row.get("supplier_id", supplier_id),
+            "name": row.get("name", ""),
+            "quality_score": row.get("quality_score", 0),
+            "reliability_score": row.get("reliability_score", 0),
             "certifications": row.get("certifications"),
         },
-        summary=f"Retrieved supplier profile for {row['name']} ({row['supplier_id']}).",
+        summary=f"Retrieved supplier profile for {row.get('name', supplier_id)} ({row.get('supplier_id', supplier_id)}).",
     )
 
 
@@ -42,10 +44,12 @@ def send_supplier_message(supplier_id: str, po_id: str, message: str, db: Databa
     """
     reply_text = simulate_supplier_reply(supplier_id, po_id, message)
 
-    now = datetime.utcnow()
+    # Compute both timestamps at once to avoid race condition in message IDs
+    now_out = datetime.now(timezone.utc)
+    now_in = datetime.now(timezone.utc)
     db["supplier_messages"].insert_many([
-        {"message_id": f"MSG-{datetime.utcnow().timestamp()}-out", "supplier_id": supplier_id, "po_id": po_id, "message": message, "timestamp": now},
-        {"message_id": f"MSG-{datetime.utcnow().timestamp()}-in", "supplier_id": supplier_id, "po_id": po_id, "message": reply_text, "timestamp": datetime.utcnow()},
+        {"message_id": f"MSG-{now_out.timestamp()}-out", "supplier_id": supplier_id, "po_id": po_id, "message": message, "timestamp": now_out},
+        {"message_id": f"MSG-{now_in.timestamp()}-in", "supplier_id": supplier_id, "po_id": po_id, "message": reply_text, "timestamp": now_in},
     ])
 
     return ToolResult(
@@ -64,3 +68,4 @@ def get_tracking_status(po_id: str, db: Database) -> ToolResult:
         data={"po_id": po_id, "tracking_status": status},
         summary=f"Tracking for {po_id}: {status}",
     )
+

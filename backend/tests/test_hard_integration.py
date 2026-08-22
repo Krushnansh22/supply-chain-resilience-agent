@@ -509,13 +509,13 @@ class TestAgentStateMachine:
 
     def test_approve_nonexistent_incident_returns_error(self, client):
         resp = client.post("/agent/approve", json={"incident_id": "INC-GHOST"})
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 404
+        assert "incident not found" in resp.json().get("detail", "")
 
     def test_reject_nonexistent_incident_returns_error(self, client):
         resp = client.post("/agent/reject", json={"incident_id": "INC-GHOST"})
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 404
+        assert "incident not found" in resp.json().get("detail", "")
 
     def test_trigger_request_extra_field_forbidden(self, client):
         resp = client.post("/agent/trigger", json={"incident_id": "INC-001", "hacked": "bad"})
