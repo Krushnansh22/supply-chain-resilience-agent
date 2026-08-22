@@ -1,20 +1,34 @@
-# ==============================================================
+# ==============================================================================
 # docker-compose.yml
-# Owner: Developer 2 (Backend / Simulation) + Developer 4 (Frontend) coordinate this file
+# Supply Chain Resilience Agent — Multi-Service Orchestration
 #
-# Brings up:
-#   - backend  -> FastAPI + MongoDB Atlas + Agent + Decision Engine         (port 8000)
-#   - frontend -> React Control Tower UI                                    (port 5173)
+# Services:
+#   backend   → FastAPI + MongoDB Atlas + Agent + Decision Engine  (port 8000)
+#   n8n       → n8n Workflow Engine                                (port 5678)
+#   frontend  → React Control Tower UI                             (port 5173)
+#
+# Network:
+#   internal_network (bridge) — shared by backend + n8n so n8n can reach
+#   the backend via http://backend:8000 without going through the host.
+#
+# Env file:
+#   Configuration is isolated per-service:
+#   - Backend/n8n: backend/.env
+#   - Frontend:    frontend/.env
+#   Copy the respective .env.example files and fill in real values.
 #
 # Run:
 #   docker compose up --build
 #
-# Backend will be reachable at:      http://localhost:8000
-# Frontend will be reachable at:     http://localhost:5173
-# API docs (Swagger, auto by FastAPI): http://localhost:8000/docs
-# ==============================================================
+# Endpoints:
+#   Backend API (Swagger):   http://localhost:8000/docs
+#   n8n Workflow UI:         http://localhost:5678
+#   Frontend:                http://localhost:5173
+# ==============================================================================
 
 services:
+
+  # ── Backend (FastAPI) ────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -25,10 +39,60 @@ services:
     env_file:
       - ./backend/.env
     volumes:
-      # Mount source for hot-reload during hackathon dev; remove for a "frozen" demo build.
+      # Mount source for hot-reload during development; remove for frozen prod build.
       - ./backend/app:/app/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - internal_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
 
+  # ── n8n Workflow Engine ──────────────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: scda-n8n
+    ports:
+      - "5678:5678"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Tell n8n which port and host to bind to.
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      # Public-facing webhook URL (use ngrok/cloudflare tunnel for external ERP events).
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
+      # Encryption key for storing credentials at rest inside n8n.
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      # Path inside the container where n8n persists its SQLite DB + workflow data.
+      - N8N_USER_FOLDER=${N8N_USER_FOLDER:-/home/node/.n8n}
+      # Pass through all variables that workflow nodes reference via $env.*
+      - BACKEND_URL=${BACKEND_URL:-http://backend:8000}
+      - BACKEND_API_KEY=${BACKEND_API_KEY}
+      - AUTONOMOUS_APPROVAL_LIMIT_USD=${AUTONOMOUS_APPROVAL_LIMIT_USD:-50000}
+      - NOTIFY_FROM_EMAIL=${NOTIFY_FROM_EMAIL}
+      - APPROVAL_NOTIFY_EMAIL=${APPROVAL_NOTIFY_EMAIL}
+      - OPS_ALERT_EMAIL=${OPS_ALERT_EMAIL}
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - GROQ_TEMPERATURE=${GROQ_TEMPERATURE:-0.1}
+    volumes:
+      # Persist n8n workflows, credentials, and execution history across restarts.
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - internal_network
+    restart: unless-stopped
+
+  # ── Frontend (React) ─────────────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -43,6 +107,24 @@ services:
     environment:
       - VITE_API_BASE_URL=http://localhost:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - internal_network
     command: npm run dev -- --host 0.0.0.0
+    restart: unless-stopped
 
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  # Named volume for n8n: persists SQLite DB, workflow JSON, and encrypted credentials.
+  n8n_data:
+    driver: local
+
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  # Shared bridge network: allows n8n to reach backend at http://backend:8000
+  # and frontend to reach backend at http://backend:8000 — without host exposure.
+  internal_network:
+    driver: bridge
