@@ -42,4 +42,27 @@ def get_inventory(component_id: str, db: Session) -> ToolResult:
         summary=f"Checked inventory — {row.usable_stock} usable units remain ({days} days of supply).",
     )
 
-# TODO (Dev2/Dev3): add adjust_inventory(component_id, delta, db) used internally by erp_tools.update_erp
+
+def adjust_inventory(component_id: str, delta: int, db: Session) -> ToolResult:
+    """
+    Internal helper: adjusts usable_stock by delta (positive=add, negative=reduce).
+    Called by erp_tools.update_erp after executing a recovery plan.
+    """
+    row = db.query(Inventory).filter(Inventory.component_id == component_id).first()
+    if not row:
+        return ToolResult(
+            tool_name="adjust_inventory",
+            success=False,
+            error=f"component {component_id} not found",
+            summary=f"Could not adjust inventory for {component_id} — component not found.",
+        )
+    row.usable_stock = max(0, row.usable_stock + delta)
+    db.commit()
+    db.refresh(row)
+    days = compute_days_of_supply(row.usable_stock, row.daily_usage)
+    return ToolResult(
+        tool_name="adjust_inventory",
+        success=True,
+        data={"component_id": component_id, "usable_stock": row.usable_stock, "days_of_supply": days},
+        summary=f"Adjusted {component_id} stock by {delta:+d}. Now {row.usable_stock} usable units ({days} days).",
+    )

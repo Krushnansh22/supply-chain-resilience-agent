@@ -12,22 +12,32 @@ DELIVERS: creates a row in `incidents` (and any supporting fake data, e.g. a sup
           simulator/disruption_injector.py
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.simulator.disruption_injector import inject_scenario
+from app.schemas.common import IncidentOut
+from app.simulator.disruption_injector import inject_scenario, SCENARIO_DEFAULTS
 
 router = APIRouter()
+
+VALID_SCENARIOS = set(SCENARIO_DEFAULTS.keys())
 
 
 class InjectRequest(BaseModel):
     scenario: str  # "SUPPLIER_DELAY" | "STALE_INVENTORY" | "SUPPLIER_LIE" | "QUALITY_FAILURE" | "BUDGET_OVERRUN"
 
 
-@router.post("/inject")
+@router.post("/inject", response_model=IncidentOut)
 def inject(req: InjectRequest, db: Session = Depends(get_db)):
-    """POST /simulator/inject {"scenario": "SUPPLIER_DELAY"} -> creates a new incident."""
+    """POST /simulator/inject {"scenario": "SUPPLIER_DELAY"} -> creates a new incident.
+    Returns 422 if scenario name is unknown.
+    """
+    if req.scenario not in VALID_SCENARIOS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown scenario '{req.scenario}'. Valid options: {sorted(VALID_SCENARIOS)}",
+        )
     incident = inject_scenario(req.scenario, db)
-    return incident
+    return IncidentOut.model_validate(incident)

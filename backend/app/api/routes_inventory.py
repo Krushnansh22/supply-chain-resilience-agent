@@ -11,6 +11,7 @@ DELIVERS: JSON consumed by (a) frontend Inventory page (Dev4) and
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.models.inventory import Inventory
@@ -42,4 +43,35 @@ def get_component(component_id: str, db: Session = Depends(get_db)):
     item.days_of_supply = compute_days_of_supply(row.usable_stock, row.daily_usage)
     return item
 
-# TODO (Dev2): POST /inventory/{component_id}/adjust  -- used by update_erp tool
+
+class AdjustRequest(BaseModel):
+    delta: int    # positive = add stock, negative = remove stock
+    reason: str   # human-readable reason for audit trail
+
+
+@router.post("/{component_id}/adjust", response_model=InventoryOut)
+def adjust_inventory(component_id: str, req: AdjustRequest, db: Session = Depends(get_db)):
+    """
+    POST /inventory/{component_id}/adjust
+    Adjusts usable_stock by delta (positive = add, negative = reduce).
+    Used by update_erp tool and convenience endpoints.
+    """
+    row = db.query(Inventory).filter(Inventory.component_id == component_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="component not found")
+
+    new_stock = row.usable_stock + req.delta
+    if new_stock < 0:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Adjustment would result in negative stock ({new_stock}). Current usable: {row.usable_stock}.",
+        )
+
+    row.usable_stock = new_stock
+    row.current_stock = max(row.current_stock + req.delta, row.usable_stock)
+    db.commit()
+    db.refresh(row)
+
+    item = InventoryOut.model_validate(row)
+    item.days_of_supply = compute_days_of_supply(row.usable_stock, row.daily_usage)
+    return item

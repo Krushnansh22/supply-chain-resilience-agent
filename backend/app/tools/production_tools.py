@@ -9,6 +9,8 @@ DELIVERS: ToolResult feeding the PRODUCTION info card + "Production coverage is 
 from sqlalchemy.orm import Session
 
 from app.models.production_orders import ProductionOrder
+from app.models.inventory import Inventory
+from app.decision_engine.inventory_calc import compute_days_of_supply
 from app.decision_engine.production_risk import assess_production_risk
 from app.schemas.tool_io import ToolResult
 
@@ -23,11 +25,20 @@ def get_production_orders(component_id: str, db: Session, days_of_supply: float 
             summary=f"No production orders depend on {component_id}.",
         )
 
+    # BUG FIX: look up actual days_of_supply from DB if not provided by caller,
+    # instead of defaulting to 9999 which always shows risk as LOW.
+    if days_of_supply is None:
+        inv = db.query(Inventory).filter(Inventory.component_id == component_id).first()
+        if inv:
+            days_of_supply = compute_days_of_supply(inv.usable_stock, inv.daily_usage)
+        else:
+            days_of_supply = 0.0  # no inventory record → treat as zero supply
+
     results = []
     for r in rows:
         risk = assess_production_risk(
             production_id=r.production_id,
-            days_of_supply=days_of_supply if days_of_supply is not None else 9999,
+            days_of_supply=days_of_supply,
             deadline=r.deadline,
             priority=r.priority,
         )
@@ -44,5 +55,5 @@ def get_production_orders(component_id: str, db: Session, days_of_supply: float 
         tool_name="get_production_orders",
         success=True,
         data=results,
-        summary=f"Checked {len(results)} production order(s) depending on {component_id}.",
+        summary=f"Checked {len(results)} production order(s) depending on {component_id}. Days of supply: {days_of_supply}.",
     )

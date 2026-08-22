@@ -31,11 +31,12 @@ SCENARIO_DEFAULTS = {
 
 def inject_scenario(scenario: str, db: Session) -> Incident:
     """
-    TODO (Dev2/Dev3): validate `scenario` against SCENARIO_DEFAULTS, raise a clean
-    422 if unknown (handle in the router, not here). Extend SCENARIO_DEFAULTS with
-    more/other components once seed_data.py has more than the hero chain.
+    Creates a new Incident row for the given scenario.
+    Raises KeyError if scenario is unknown (caller in routes_simulator.py validates first).
+    For SUPPLIER_LIE: registers the affected PO so supplier_simulator returns
+    contradicting data (dispatch claim vs NO_PICKUP_SCAN tracking status).
     """
-    defaults = SCENARIO_DEFAULTS.get(scenario, SCENARIO_DEFAULTS["SUPPLIER_DELAY"])
+    defaults = SCENARIO_DEFAULTS[scenario]
     incident = Incident(
         incident_id=f"INC-{uuid.uuid4().hex[:6].upper()}",
         status="DETECTED",
@@ -44,4 +45,10 @@ def inject_scenario(scenario: str, db: Session) -> Incident:
     db.add(incident)
     db.commit()
     db.refresh(incident)
+
+    # Register lie scenario so simulator returns contradicting data
+    if scenario == "SUPPLIER_LIE" and incident.affected_po:
+        from app.simulator.supplier_simulator import register_supplier_lie
+        register_supplier_lie(incident.affected_po)
+
     return incident
