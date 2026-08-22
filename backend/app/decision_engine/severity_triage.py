@@ -142,10 +142,22 @@ def triage_incident(inp: TriageInput) -> TriageResult:
     score += financial_pressure
 
     # Factor 5: Supplier risk (low scores indicate unreliable supplier)
+    # Auto-normalize score if provided on 0.0-1.0 scale
+    q_score = (
+        inp.supplier_quality_score * 100
+        if 0 < inp.supplier_quality_score <= 1.0
+        else inp.supplier_quality_score
+    )
+    r_score = (
+        inp.supplier_reliability_score * 100
+        if 0 < inp.supplier_reliability_score <= 1.0
+        else inp.supplier_reliability_score
+    )
+
     supplier_risk = 0.0
-    if inp.supplier_quality_score < 60 or inp.supplier_reliability_score < 60:
+    if q_score < 60 or r_score < 60:
         supplier_risk = 2.0
-    elif inp.supplier_quality_score < 80 or inp.supplier_reliability_score < 80:
+    elif q_score < 80 or r_score < 80:
         supplier_risk = 1.0
 
     factors["supplier_risk"] = round(supplier_risk, 2)

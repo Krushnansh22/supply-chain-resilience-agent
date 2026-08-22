@@ -18,7 +18,7 @@ SECURITY ADDITIONS (Dev2):
   - Input validators on TriggerRequest and ApprovalDecision
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel, ConfigDict, field_validator, Field
 from pymongo.database import Database
 
@@ -30,11 +30,13 @@ from app.middleware.rate_limiter import check_rate_limit
 
 router = APIRouter()
 
+_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
+
 
 class TriggerRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    incident_id: str = Field(..., min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    incident_id: str = Field(..., min_length=1, max_length=32, pattern=_ID_PATTERN)
 
     @field_validator("incident_id")
     @classmethod
@@ -45,7 +47,7 @@ class TriggerRequest(BaseModel):
 class ApprovalDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    incident_id: str = Field(..., min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    incident_id: str = Field(..., min_length=1, max_length=32, pattern=_ID_PATTERN)
     approver: str = Field(default="human-coordinator", min_length=1, max_length=64)
 
     @field_validator("incident_id", "approver")
@@ -71,12 +73,18 @@ def trigger_agent(
 
 
 @router.get("/state/{incident_id}")
-def agent_state(incident_id: str, db: Database = Depends(get_mongo_db)):
+def agent_state(
+    incident_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
+    db: Database = Depends(get_mongo_db),
+):
     return {"incident_id": incident_id, "state": get_agent_state(incident_id, db)}
 
 
 @router.get("/plan/{incident_id}")
-def agent_plan(incident_id: str, db: Database = Depends(get_mongo_db)):
+def agent_plan(
+    incident_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
+    db: Database = Depends(get_mongo_db),
+):
     plan = db["recovery_plans"].find_one({"incident_id": incident_id}, {"_id": 0})
     if not plan:
         return {

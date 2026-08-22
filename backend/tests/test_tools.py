@@ -65,3 +65,98 @@ def test_request_rfq_persists_rows(mock_db):
     assert result.success is True
     assert len(result.data) == 2
     assert mock_db["rfqs"].count_documents({"component_id": "COMP-001"}) == 2
+
+
+def test_get_production_orders_evaluates_risk_without_attribute_error(mock_db):
+    """get_production_orders correctly accesses dictionary items without AttributeError."""
+    from datetime import datetime, timezone, timedelta
+    from app.tools.production_tools import get_production_orders
+
+    mock_db["inventory"].insert_one({
+        "component_id": "COMP-104",
+        "usable_stock": 100,
+        "daily_usage": 50.0,
+    })
+    mock_db["production_orders"].insert_one({
+        "production_id": "PROD-999",
+        "product": "Industrial Controller",
+        "component_id": "COMP-104",
+        "quantity": 100,
+        "priority": "HIGH",
+        "deadline": datetime.now(timezone.utc) + timedelta(days=10),
+    })
+
+    result = get_production_orders("COMP-104", mock_db)
+    assert result.success is True
+    assert len(result.data) == 1
+    assert result.data[0]["production_id"] == "PROD-999"
+    assert result.data[0]["risk_level"] in ("CRITICAL", "HIGH")
+
+
+def test_update_erp_executes_recovery_option(mock_db):
+    """update_erp creates POs, increments stock, and resolves incident."""
+    from app.tools.erp_tools import update_erp
+    from app.schemas.recovery_plan import RecoveryPlanOption, SupplierAllocation
+
+    mock_db["incidents"].insert_one({
+        "incident_id": "INC-ERP-01",
+        "affected_component": "COMP-104",
+        "status": "EXECUTING",
+    })
+    mock_db["inventory"].insert_one({
+        "component_id": "COMP-104",
+        "usable_stock": 100,
+        "daily_usage": 10.0,
+    })
+
+    option = RecoveryPlanOption(
+        option_id="A",
+        allocations=[
+            SupplierAllocation(
+                supplier_id="SUP-001",
+                quantity=500,
+                unit_price=10.0,
+                delivery_days=3,
+            )
+        ],
+        total_cost=5000.0,
+        max_delivery_days=3,
+        constraints_satisfied=True,
+    )
+
+    res = update_erp("INC-ERP-01", option, mock_db)
+    assert res.success is True
+    assert len(res.data["purchase_orders_created"]) == 1
+
+    # Check incident was resolved
+    inc = mock_db["incidents"].find_one({"incident_id": "INC-ERP-01"})
+    assert inc["status"] == "RESOLVED"
+
+    # Check usable stock increased
+    inv = mock_db["inventory"].find_one({"component_id": "COMP-104"})
+    assert inv["usable_stock"] == 600
+
+
+def test_update_erp_rejects_missing_incident(mock_db):
+    """update_erp returns failure when incident does not exist."""
+    from app.tools.erp_tools import update_erp
+    from app.schemas.recovery_plan import RecoveryPlanOption, SupplierAllocation
+
+    option = RecoveryPlanOption(
+        option_id="A",
+        allocations=[
+            SupplierAllocation(
+                supplier_id="SUP-001",
+                quantity=100,
+                unit_price=5.0,
+                delivery_days=2,
+            )
+        ],
+        total_cost=500.0,
+        max_delivery_days=2,
+        constraints_satisfied=True,
+    )
+
+    res = update_erp("INC-GHOST-999", option, mock_db)
+    assert res.success is False
+    assert "not found" in res.error.lower()
