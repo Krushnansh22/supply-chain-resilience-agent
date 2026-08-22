@@ -2,13 +2,7 @@
  * src/components/incidents/IncidentsListPage.jsx
  * Owner: Developer 4 (Frontend)
  *
- * Dedicated "Incidents" page (spec page 2, distinct from the Overview's top-5
- * preview and from the Incident Command Center's single-incident deep dive).
- * Shows every incident with severity, component, PO, a best-effort production
- * impact (client-side join against /production by affected_component — this
- * is a display join, not a risk calculation), and status.
- *
- * RECEIVES: GET /incidents, GET /production (src/api/incidents.js, production.js)
+ * RECEIVES: GET /incidents, GET /production
  * DELIVERS: navigation to /incidents/:incidentId
  */
 import { useEffect, useMemo, useState } from "react";
@@ -27,7 +21,7 @@ export default function IncidentsListPage() {
   const [severityFilter, setSeverityFilter] = useState("ALL");
 
   useEffect(() => {
-    Promise.all([listIncidents(), listProductionOrders()])
+    Promise.all([listIncidents("all"), listProductionOrders()])
       .then(([incidentsRes, productionsRes]) => {
         setIncidents(incidentsRes);
         setProductions(productionsRes);
@@ -50,7 +44,14 @@ export default function IncidentsListPage() {
     [incidents, severityFilter]
   );
 
-  if (loading) return <p>Loading incidents…</p>;
+  if (loading) {
+    return (
+      <div className="loading-shell">
+        <span className="loading-orb" />
+        <span>Loading incidents…</span>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -59,7 +60,7 @@ export default function IncidentsListPage() {
           <h1>Incidents</h1>
           <div className="page-subtitle">{incidents.length} total · {filtered.length} shown</div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {["ALL", ...SEVERITY_ORDER].map((s) => (
             <button
               key={s}
@@ -72,7 +73,7 @@ export default function IncidentsListPage() {
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel elevated-panel">
         {filtered.length === 0 ? (
           <p className="empty-state">No incidents match this filter.</p>
         ) : (
@@ -94,7 +95,7 @@ export default function IncidentsListPage() {
                   <tr key={incident.incident_id}>
                     <td><SeverityBadge severity={incident.severity} /></td>
                     <td>
-                      <Link to={`/incidents/${incident.incident_id}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
+                      <Link to={`/incidents/${incident.incident_id}`} style={{ color: "var(--accent-2)", textDecoration: "none", fontWeight: 600 }}>
                         {incident.incident_id}
                       </Link>
                       <div style={{ color: "var(--text-secondary)", fontSize: 12 }}>

@@ -1,7 +1,6 @@
 /**
  * src/components/production/ProductionPage.jsx
  * Owner: Developer 4 (Frontend)
- * RECEIVES: GET /production (src/api/production.js)
  */
 import { useEffect, useState } from "react";
 import { listProductionOrders } from "../../api/production.js";
@@ -22,7 +21,7 @@ export default function ProductionPage() {
           <div className="page-subtitle">{rows.length} orders</div>
         </div>
       </div>
-      <div className="panel">
+      <div className="panel elevated-panel">
         {loading ? (
           <p className="empty-state">Loading production orders…</p>
         ) : (

@@ -1,28 +1,19 @@
 /**
  * src/components/audit/AuditTimeline.jsx
  * Owner: Developer 4 (Frontend)
- *
- * Team doc Section 17: full chronological audit trail across all incidents.
- * RECEIVES: GET /audit (src/api/audit.js) -> schemas/common.AuditLogOut[]
  */
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { listAuditLogs } from "../../api/audit.js";
+import ActivityFeed from "./ActivityFeed.jsx";
 
 export default function AuditTimeline() {
   const [logs, setLogs] = useState([]);
-  const [incidentFilter, setIncidentFilter] = useState("ALL");
-
-  useEffect(() => { listAuditLogs().then(setLogs).catch(console.error); }, []);
-
-  const incidentIds = useMemo(
-    () => [...new Set(logs.map((l) => l.incident_id).filter(Boolean))],
-    [logs]
-  );
-  const filtered = useMemo(
-    () => (incidentFilter === "ALL" ? logs : logs.filter((l) => l.incident_id === incidentFilter)),
-    [logs, incidentFilter]
-  );
+  useEffect(() => {
+    const load = () => listAuditLogs().then(setLogs).catch(console.error);
+    load();
+    const interval = setInterval(load, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div>
@@ -39,12 +30,12 @@ export default function AuditTimeline() {
         )}
       </div>
 
-      <div className="panel">
+      <div className="panel elevated-panel">
         {filtered.length === 0 ? (
           <p className="empty-state">No audit events yet.</p>
         ) : (
           [...filtered].reverse().map((log, i) => (
-            <div key={i} style={{ padding: "10px 0", borderBottom: "1px solid var(--border-subtle)", fontSize: 13 }}>
+            <div key={i} style={{ padding: "12px 0", borderBottom: "1px solid var(--border-subtle)", fontSize: 13 }}>
               <div style={{ fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
                 {new Date(log.timestamp).toLocaleString()} ·{" "}
                 {log.incident_id ? (
@@ -52,13 +43,14 @@ export default function AuditTimeline() {
                 ) : "—"}
                 {log.tool && <span> · {log.tool}</span>}
               </div>
-              <div>{log.action}</div>
-              {log.decision && <div style={{ color: "var(--accent)" }}>Decision: {log.decision} — {log.reason}</div>}
-              {log.result && <div style={{ color: "var(--text-secondary)" }}>{log.result}</div>}
+              <div style={{ marginTop: 2 }}>{log.action}</div>
+              {log.decision && <div style={{ color: "var(--accent-2)", marginTop: 2 }}>Decision: {log.decision} — {log.reason}</div>}
+              {log.result && <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>{log.result}</div>}
             </div>
           ))
         )}
       </div>
+      <ActivityFeed logs={logs} showFilters title="Audit history" />
     </div>
   );
 }

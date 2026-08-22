@@ -1,7 +1,6 @@
 /**
  * src/components/suppliers/SuppliersPage.jsx
  * Owner: Developer 4 (Frontend)
- * RECEIVES: GET /suppliers (src/api/suppliers.js)
  */
 import { useEffect, useState } from "react";
 import { listSuppliers } from "../../api/suppliers.js";
@@ -22,7 +21,7 @@ export default function SuppliersPage() {
           <div className="page-subtitle">{rows.length} suppliers</div>
         </div>
       </div>
-      <div className="panel">
+      <div className="panel elevated-panel">
         {loading ? (
           <p className="empty-state">Loading suppliers…</p>
         ) : (

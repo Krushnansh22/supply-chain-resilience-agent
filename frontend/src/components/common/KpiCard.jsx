@@ -3,7 +3,7 @@
  * Owner: Developer 4 (Frontend)
  *
  * Single KPI tile used on the Overview dashboard's top strip. `tone` picks the
- * left accent color so critical/at-risk numbers stand out without judges
+ * top accent color so critical/at-risk numbers stand out without judges
  * having to read the label first.
  */
 export default function KpiCard({ label, value, hint, tone }) {

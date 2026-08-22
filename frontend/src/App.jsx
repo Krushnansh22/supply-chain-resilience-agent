@@ -17,7 +17,7 @@
  * DELIVERS: rendered app shell; individual pages own their own data fetching via src/api/*
  */
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Sidebar from "./components/layout/Sidebar.jsx";
 import TopBar from "./components/layout/TopBar.jsx";
 
@@ -28,9 +28,10 @@ import ApprovalsPage from "./components/approvals/ApprovalsPage.jsx";
 import InventoryPage from "./components/inventory/InventoryPage.jsx";
 import ProductionPage from "./components/production/ProductionPage.jsx";
 import SuppliersPage from "./components/suppliers/SuppliersPage.jsx";
-import AuditTimeline from "./components/audit/AuditTimeline.jsx";
 import AgentActivityPage from "./components/audit/AgentActivityPage.jsx";
 import DisruptionSimulatorPanel from "./components/simulator/DisruptionSimulatorPanel.jsx";
+import DiagnosticsPage from "./components/diagnostics/DiagnosticsPage.jsx";
+import ReportsPage from "./components/reports/ReportsPage.jsx";
 
 export default function App() {
   return (
@@ -48,8 +49,10 @@ export default function App() {
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/production" element={<ProductionPage />} />
               <Route path="/suppliers" element={<SuppliersPage />} />
-              <Route path="/audit" element={<AuditTimeline />} />
+              <Route path="/audit" element={<Navigate to="/agent-activity" replace />} />
               <Route path="/agent-activity" element={<AgentActivityPage />} />
+              <Route path="/diagnostics" element={<DiagnosticsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
               <Route path="/simulator" element={<DisruptionSimulatorPanel />} />
             </Routes>
           </div>

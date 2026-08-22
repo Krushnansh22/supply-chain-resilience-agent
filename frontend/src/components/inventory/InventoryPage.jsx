@@ -1,7 +1,6 @@
 /**
  * src/components/inventory/InventoryPage.jsx
  * Owner: Developer 4 (Frontend)
- * RECEIVES: GET /inventory (src/api/inventory.js)
  */
 import { useEffect, useState } from "react";
 import { listInventory } from "../../api/inventory.js";
@@ -22,7 +21,7 @@ export default function InventoryPage() {
           <div className="page-subtitle">{rows.length} components tracked</div>
         </div>
       </div>
-      <div className="panel">
+      <div className="panel elevated-panel">
         {loading ? (
           <p className="empty-state">Loading inventory…</p>
         ) : (

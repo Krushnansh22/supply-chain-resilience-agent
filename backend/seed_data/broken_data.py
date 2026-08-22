@@ -18,8 +18,21 @@ from pymongo.database import Database
 NOW = datetime.now(timezone.utc)
 
 
-def inject_broken_data(db: Database) -> None:
+BROKEN_SCENARIOS = {
+    "inventory",
+    "suppliers",
+    "purchase_orders",
+    "production_orders",
+    "audit_logs",
+    "integration_errors",
+    "all",
+}
+
+
+def inject_broken_data(db: Database, scenario: str = "all") -> None:
     """Injects broken/inconsistent data into the database for testing all error paths."""
+    if scenario not in BROKEN_SCENARIOS:
+        raise ValueError(f"Unknown broken-data scenario: {scenario}")
 
     # ------------------------------------------------------------------
     # INVENTORY anomalies
@@ -65,12 +78,13 @@ def inject_broken_data(db: Database) -> None:
             "last_updated": NOW.isoformat(),
         },
     ]
-    for item in inventory_broken:
-        db["inventory"].update_one(
-            {"component_id": item["component_id"]},
-            {"$set": item},
-            upsert=True,
-        )
+    if scenario in {"inventory", "all"}:
+        for item in inventory_broken:
+            db["inventory"].update_one(
+                {"component_id": item["component_id"]},
+                {"$set": item},
+                upsert=True,
+            )
 
     # ------------------------------------------------------------------
     # SUPPLIER anomalies
@@ -99,12 +113,13 @@ def inject_broken_data(db: Database) -> None:
             "anomaly": "BLACKLISTED_WITH_OPEN_PO",
         },
     ]
-    for s in supplier_broken:
-        db["suppliers"].update_one(
-            {"supplier_id": s["supplier_id"]},
-            {"$set": s},
-            upsert=True,
-        )
+    if scenario in {"suppliers", "all"}:
+        for s in supplier_broken:
+            db["suppliers"].update_one(
+                {"supplier_id": s["supplier_id"]},
+                {"$set": s},
+                upsert=True,
+            )
 
     # ------------------------------------------------------------------
     # PURCHASE ORDER anomalies
@@ -168,12 +183,13 @@ def inject_broken_data(db: Database) -> None:
             "notes": "Potential duplicate of PO-7712 — same supplier, component, quantity",
         },
     ]
-    for po in po_broken:
-        db["purchase_orders"].update_one(
-            {"po_id": po["po_id"]},
-            {"$set": po},
-            upsert=True,
-        )
+    if scenario in {"purchase_orders", "all"}:
+        for po in po_broken:
+            db["purchase_orders"].update_one(
+                {"po_id": po["po_id"]},
+                {"$set": po},
+                upsert=True,
+            )
 
     # ------------------------------------------------------------------
     # PRODUCTION ORDER anomalies
@@ -206,12 +222,13 @@ def inject_broken_data(db: Database) -> None:
             "anomaly": "PAST_DEADLINE_NOT_OVERDUE",
         },
     ]
-    for p in prod_broken:
-        db["production_orders"].update_one(
-            {"production_id": p["production_id"]},
-            {"$set": p},
-            upsert=True,
-        )
+    if scenario in {"production_orders", "all"}:
+        for p in prod_broken:
+            db["production_orders"].update_one(
+                {"production_id": p["production_id"]},
+                {"$set": p},
+                upsert=True,
+            )
 
     # ------------------------------------------------------------------
     # AUDIT LOG anomalies — for error path testing
@@ -259,12 +276,13 @@ def inject_broken_data(db: Database) -> None:
             "ingested_at": NOW.isoformat(),
         },
     ]
-    for log in audit_broken:
-        db["audit_logs"].update_one(
-            {"event_id": log["event_id"]},
-            {"$set": log},
-            upsert=True,
-        )
+    if scenario in {"audit_logs", "all"}:
+        for log in audit_broken:
+            db["audit_logs"].update_one(
+                {"event_id": log["event_id"]},
+                {"$set": log},
+                upsert=True,
+            )
 
     # ------------------------------------------------------------------
     # INTEGRATION ERROR RECORDS — for retry/error testing
@@ -313,17 +331,12 @@ def inject_broken_data(db: Database) -> None:
             "resolved": False,
         },
     ]
-    for err in integration_errors:
-        db["integration_errors"].update_one(
-            {"error_id": err["error_id"]},
-            {"$set": err},
-            upsert=True,
-        )
+    if scenario in {"integration_errors", "all"}:
+        for err in integration_errors:
+            db["integration_errors"].update_one(
+                {"error_id": err["error_id"]},
+                {"$set": err},
+                upsert=True,
+            )
 
-    print("✅ Broken/anomalous data injected for comprehensive testing.")
-    print(f"   Inventory anomalies:       {len(inventory_broken)} items")
-    print(f"   Supplier anomalies:        {len(supplier_broken)} suppliers")
-    print(f"   PO anomalies:              {len(po_broken)} orders")
-    print(f"   Production anomalies:      {len(prod_broken)} orders")
-    print(f"   Audit log anomalies:       {len(audit_broken)} entries")
-    print(f"   Integration error records: {len(integration_errors)} errors")
+    print(f"✅ Broken-data scenario injected: {scenario}")
