@@ -7,9 +7,14 @@
 import { useState } from "react";
 import { approvePlan } from "../../api/agent.js";
 
-export default function RecoveryPlanPanel({ plan, incidentId, onExecuted }) {
+export default function RecoveryPlanPanel({ plan, incident, incidentId, onExecuted }) {
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState(null);
+
+  const recommended = plan.options?.find((o) => o.option_id === plan.recommended_option_id);
+  const approvalReason = plan.requires_human_approval
+    ? `This plan costs $${recommended?.total_cost?.toLocaleString() || 0} and exceeds the $${plan.approval_threshold_usd?.toLocaleString() || 50000} autonomous threshold.`
+    : `This plan costs $${recommended?.total_cost?.toLocaleString() || 0} and is within the $${plan.approval_threshold_usd?.toLocaleString() || 50000} autonomous threshold.`;
 
   const handleExecute = async () => {
     setExecuting(true);
