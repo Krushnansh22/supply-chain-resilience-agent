@@ -28,4 +28,22 @@ def get_supplier(supplier_id: str, repo: SupplierRepository = Depends(get_repo))
         raise HTTPException(status_code=404, detail="supplier not found")
     return row
 
-# TODO (Dev2): GET /suppliers/{supplier_id}/messages -- list supplier_messages for that supplier
+
+@router.get("/{supplier_id}/messages", response_model=List[SupplierMessageOut])
+def get_supplier_messages(supplier_id: str, db: Session = Depends(get_db)):
+    """
+    GET /suppliers/{supplier_id}/messages
+    Returns all messages exchanged with this supplier (both outbound and simulated inbound),
+    ordered chronologically. Used by frontend supplier message thread display.
+    """
+    supplier = db.query(Supplier).filter(Supplier.supplier_id == supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=404, detail="supplier not found")
+
+    messages = (
+        db.query(SupplierMessage)
+        .filter(SupplierMessage.supplier_id == supplier_id)
+        .order_by(SupplierMessage.timestamp.asc())
+        .all()
+    )
+    return messages

@@ -12,10 +12,18 @@ DELIVERS:
   - `init_db()`-> called once at startup (see main.py) to create tables + call seed_data
 """
 
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 from app.config import settings
+
+# Ensure the data/ directory exists before SQLite tries to open the file (BUG FIX)
+if settings.DATABASE_URL.startswith("sqlite"):
+    db_path = settings.DATABASE_URL.replace("sqlite:///", "")
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
 
 # check_same_thread=False is needed because SQLite + FastAPI's threaded workers
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
@@ -58,8 +66,10 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
 
-    # TODO (Dev2): seed hero scenario (COMP-104 -> PO-7712 -> SUP-21 -> PROD-882)
-    # from app.simulator.seed_data import run as seed_run
-    # db = SessionLocal()
-    # seed_run(db)
-    # db.close()
+    # Seed hero scenario (COMP-104 -> PO-7712 -> SUP-21 -> PROD-882) on first run
+    from app.simulator.seed_data import run as seed_run
+    db = SessionLocal()
+    try:
+        seed_run(db)
+    finally:
+        db.close()

@@ -74,3 +74,14 @@ class AuditLogOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SupplierMessageOut(BaseModel):
+    message_id: int
+    supplier_id: str
+    po_id: Optional[str] = None
+    message: str
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
