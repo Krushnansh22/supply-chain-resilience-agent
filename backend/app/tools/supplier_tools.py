@@ -43,8 +43,7 @@ def get_supplier(supplier_id: str, db: Session) -> ToolResult:
 def send_supplier_message(supplier_id: str, po_id: str, message: str, db: Session) -> ToolResult:
     """
     Sends `message` to the simulated supplier and records both the outbound message
-    and the simulated inbound reply. TODO (Dev2): persist both messages via
-    app/models/supplier_messages.py.
+    and the simulated inbound reply in supplier_messages.
     """
     reply_text = simulate_supplier_reply(supplier_id, po_id, message)
 

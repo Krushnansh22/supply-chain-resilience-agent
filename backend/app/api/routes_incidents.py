@@ -6,15 +6,18 @@ RECEIVES: incidents created by simulator/disruption_injector.py
 DELIVERS:
   - list to Overview dashboard "ACTIVE INCIDENTS" section (Dev4)
   - single incident to Incident Command Center screen (Dev4)
+  - /incidents/{id}/activity -> agent activity feed for this incident
   - is the thing agent/agent_loop.py polls or subscribes to, to know what to work on
 """
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.database import get_db
 from app.models.incidents import Incident
-from app.schemas.common import IncidentOut
+from app.models.audit_logs import AuditLog
+from app.schemas.common import IncidentOut, AuditLogOut
 
 router = APIRouter()
 
@@ -32,5 +35,23 @@ def get_incident(incident_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="incident not found")
     return row
 
-# TODO (Dev1/Dev2): GET /incidents/{id}/activity -> agent activity feed for this incident
-#                    (join of audit_logs filtered by incident_id, human-readable only)
+
+@router.get("/{incident_id}/activity", response_model=List[AuditLogOut])
+def get_incident_activity(incident_id: str, db: Session = Depends(get_db)):
+    """
+    GET /incidents/{incident_id}/activity
+    Returns the chronological audit log for this incident —
+    the Agent Activity feed shown in the Incident Command Center (docs Section 14).
+    """
+    # Verify incident exists
+    incident = db.query(Incident).filter(Incident.incident_id == incident_id).first()
+    if not incident:
+        raise HTTPException(status_code=404, detail="incident not found")
+
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.incident_id == incident_id)
+        .order_by(AuditLog.timestamp.asc())
+        .all()
+    )
+    return logs
