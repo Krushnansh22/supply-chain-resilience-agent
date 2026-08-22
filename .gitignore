@@ -1,0 +1,52 @@
+# ==============================================================
+# Supply Chain Disruption Control Agent - Root .gitignore
+# ==============================================================
+
+# ---- Python (backend) ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+
+# ---- SQLite DB (simulated ERP) ----
+backend/*.db
+backend/*.sqlite3
+backend/app/*.db
+backend/app/*.sqlite3
+backend/data/*.db
+
+# ---- Node / React (frontend) ----
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---- Editor / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Docker ----
+*.pid
+
+# ---- Misc secrets ----
+*.pem
+*.key
+secrets/
