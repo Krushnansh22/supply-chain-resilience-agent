@@ -16,6 +16,7 @@ import { Link } from "react-router-dom";
 import { listIncidents } from "../../api/incidents.js";
 import { listAuditLogs } from "../../api/audit.js";
 import { listProductionOrders } from "../../api/production.js";
+import { listSuppliers } from "../../api/suppliers.js";
 import KpiCards from "./KpiCards.jsx";
 import ActiveIncidentsList from "./ActiveIncidentsList.jsx";
 import AgentActivityFeed from "./AgentActivityFeed.jsx";
@@ -24,14 +25,16 @@ export default function OverviewDashboard() {
   const [incidents, setIncidents] = useState([]);
   const [productionOrders, setProductionOrders] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
-    Promise.all([listIncidents("operational"), listAuditLogs(), listProductionOrders()])
-      .then(([incidentsRes, auditRes, productionRes]) => {
+    Promise.all([listIncidents(), listAuditLogs(), listProductionOrders(), listSuppliers()])
+      .then(([incidentsRes, auditRes, productionRes, suppliersRes]) => {
         setIncidents(incidentsRes);
         setAuditLogs(auditRes);
         setProductionOrders(productionRes);
+        setSuppliers(suppliersRes);
       })
       .catch((err) => console.error("Overview load failed:", err))
       .finally(() => setLoading(false));
@@ -54,12 +57,12 @@ export default function OverviewDashboard() {
           <h1>Control Tower</h1>
           <div className="page-subtitle">Live view of active supply-chain disruptions and agent decisions.</div>
         </div>
-        <Link to="/simulator" className="btn btn-primary" style={{ textDecoration: "none" }}>
+        <Link to="/simulator" className="btn btn-black" style={{ textDecoration: "none" }}>
           ⚡ Simulate Disruption
         </Link>
       </div>
 
-      <KpiCards incidents={incidents} productionOrders={productionOrders} />
+      <KpiCards incidents={incidents} productionOrders={productionOrders} suppliers={suppliers} />
       <div style={{ display: "flex", gap: 16, marginTop: 24, flexWrap: "wrap" }}>
         <div style={{ flex: 2, minWidth: 320 }}>
           <ActiveIncidentsList incidents={incidents} />
