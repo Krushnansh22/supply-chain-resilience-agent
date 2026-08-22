@@ -4,11 +4,12 @@
  *
  * RECEIVES: incidentId from the route
  * DELIVERS: POST /agent/trigger, /agent/approve, /agent/reject via user actions
+ *           and comprehensive LLM operations report viewing + PDF download.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { getIncident, getIncidentActivity } from "../../api/incidents.js";
+import { getIncident, getIncidentActivity, getIncidentReport } from "../../api/incidents.js";
 import { getAgentState, getAgentPlan, triggerAgent } from "../../api/agent.js";
 
 import SeverityBadge from "../common/SeverityBadge.jsx";
@@ -16,7 +17,7 @@ import StatusBadge from "../common/StatusBadge.jsx";
 import InfoCards from "./InfoCards.jsx";
 import RecoveryPlanPanel from "./RecoveryPlanPanel.jsx";
 import ApprovalModal from "./ApprovalModal.jsx";
-import ActivityFeed from "../audit/ActivityFeed.jsx";
+import { downloadOperatorReport } from "../../api/reports.js";
 
 const FLOW_STEPS = [
   { key: "DETECTED", label: "Disruption" },
@@ -38,6 +39,12 @@ export default function IncidentCommandCenter() {
   const [plan, setPlan] = useState(null);
   const [triggerError, setTriggerError] = useState(null);
   const [triggering, setTriggering] = useState(false);
+  const [reporting, setReporting] = useState(false);
+
+  // AI Brief Report State
+  const [showAiReport, setShowAiReport] = useState(false);
+  const [aiReportData, setAiReportData] = useState(null);
+  const [aiReportLoading, setAiReportLoading] = useState(false);
 
   const refresh = useCallback(() => {
     getIncident(incidentId).then(setIncident).catch(console.error);
@@ -67,6 +74,32 @@ export default function IncidentCommandCenter() {
     }
   };
 
+  const handleReport = async () => {
+    setReporting(true);
+    try {
+      await downloadOperatorReport({ incidentId });
+    } catch (err) {
+      setTriggerError(err.message || "Failed to generate report.");
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  const handleToggleAiReport = async () => {
+    if (!showAiReport && !aiReportData) {
+      setAiReportLoading(true);
+      try {
+        const data = await getIncidentReport(incidentId);
+        setAiReportData(data);
+      } catch (err) {
+        console.error("Failed to load incident report:", err);
+      } finally {
+        setAiReportLoading(false);
+      }
+    }
+    setShowAiReport(!showAiReport);
+  };
+
   if (!incident) {
     return (
       <div className="loading-shell">
@@ -90,9 +123,22 @@ export default function IncidentCommandCenter() {
               <span className="command-id">{incident.incident_id}</span>
             </div>
           </div>
-          <button className="btn-primary" disabled={triggering} onClick={handleTrigger}>
-            {triggering ? "Triggering…" : "▶ Trigger Agent"}
-          </button>
+          <div className="command-actions">
+            <button
+              className="btn-ghost"
+              disabled={aiReportLoading}
+              onClick={handleToggleAiReport}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              {aiReportLoading ? "Analyzing…" : (showAiReport ? "Hide AI Brief" : "👁 AI Incident Brief")}
+            </button>
+            <button className="btn-ghost" disabled={reporting} onClick={handleReport}>
+              {reporting ? "Preparing…" : "↓ Download PDF"}
+            </button>
+            <button className="btn-primary" disabled={triggering} onClick={handleTrigger}>
+              {triggering ? "Triggering…" : "▶ Trigger Agent"}
+            </button>
+          </div>
         </div>
 
         <div className="flow-strip">
@@ -106,6 +152,65 @@ export default function IncidentCommandCenter() {
 
         {triggerError && <div className="error-banner">{triggerError}</div>}
       </div>
+
+      {/* AI Incident Executive Brief Panel */}
+      {showAiReport && aiReportData && (
+        <div className="panel elevated-panel" style={{ marginTop: 16, borderColor: "rgba(49, 87, 213, 0.4)", background: "rgba(49, 87, 213, 0.03)", padding: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, borderBottom: "1px solid var(--border-subtle)", paddingBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="badge badge-primary">AI EXECUTIVE BRIEF</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                Comprehensive Operations Analysis — {incident.incident_id}
+              </span>
+            </div>
+            <button className="btn-ghost" style={{ fontSize: 12 }} onClick={handleReport} disabled={reporting}>
+              {reporting ? "Downloading…" : "↓ Download Formatted PDF"}
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)", textTransform: "uppercase", marginBottom: 4 }}>
+                Executive Summary
+              </div>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+                {aiReportData.narrative?.executive_summary}
+              </p>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)", textTransform: "uppercase", marginBottom: 4 }}>
+                Supply Chain Impact & Stockout Risk
+              </div>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+                {aiReportData.narrative?.impact_assessment}
+              </p>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)", textTransform: "uppercase", marginBottom: 4 }}>
+                Decision Rationale & Governance
+              </div>
+              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.6, color: "var(--text-secondary)" }}>
+                {aiReportData.narrative?.recovery_strategy}
+              </p>
+            </div>
+
+            {aiReportData.narrative?.action_items && aiReportData.narrative.action_items.length > 0 && (
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--primary)", textTransform: "uppercase", marginBottom: 4 }}>
+                  Actionable Directives
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                  {aiReportData.narrative.action_items.map((act, idx) => (
+                    <li key={idx} style={{ marginBottom: 2 }}>{act}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <InfoCards incident={incident} plan={plan} />
 

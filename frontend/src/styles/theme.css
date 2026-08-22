@@ -190,6 +190,12 @@ body::before {
 .badge-warning { background: rgba(229, 161, 26, 0.18); color: var(--warning); border: 1px solid rgba(229, 161, 26, 0.25); }
 .badge-success { background: rgba(22, 164, 107, 0.18); color: var(--success); border: 1px solid rgba(22, 164, 107, 0.25); }
 .badge-neutral { background: rgba(102, 112, 133, 0.14); color: var(--text-muted); border: 1px solid var(--border-subtle); }
+.command-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.report-builder { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; }
+.report-field { display: flex; flex-direction: column; gap: 6px; }
+.report-field label { color: var(--text-secondary); font-size: 12px; }
+.report-checkbox { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; }
+.report-success { color: var(--status-low); font-size: 13px; }
 
 /* Status dot */
 .status-dot {

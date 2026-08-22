@@ -34,6 +34,7 @@ const NAV_ITEMS = [
   { to: "/production", label: "Production", icon: "production" },
   { to: "/suppliers", label: "Suppliers", icon: "suppliers" },
   { to: "/audit", label: "Audit", icon: "audit" },
+  { to: "/reports", label: "Reports", icon: "audit" },
   { to: "/simulator", label: "Simulator", icon: "simulator" },
 ];
 

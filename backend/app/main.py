@@ -37,7 +37,6 @@ from fastapi.exceptions import RequestValidationError
 from app.config import settings
 from app.mongo_database import get_mongo_db, ping_mongo
 from seed_data.seed_data import run as seed_run
-from seed_data.broken_data import inject_broken_data
 
 from app.middleware.security import (
     SecurityHeadersMiddleware,
@@ -66,7 +65,6 @@ async def lifespan(app: FastAPI):
     ping_mongo()
     db = get_mongo_db()
     seed_run(db)
-    inject_broken_data(db)
     # Older approval handlers created audit rows without timestamps. Backfill
     # them once so the audit and Agent Activity response contracts stay valid.
     db["audit_logs"].update_many(

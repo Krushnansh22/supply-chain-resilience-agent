@@ -1,0 +1,38 @@
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+
+export async function fetchReportPreview({ incidentId, startDate, endDate, includeDiagnostics = false } = {}) {
+  const params = new URLSearchParams();
+  if (incidentId) params.set("incident_id", incidentId);
+  if (startDate) params.set("start_date", new Date(`${startDate}T00:00:00Z`).toISOString());
+  if (endDate) params.set("end_date", new Date(`${endDate}T23:59:59Z`).toISOString());
+  if (includeDiagnostics) params.set("include_diagnostics", "true");
+
+  const response = await fetch(`${BASE_URL}/audit/report/preview?${params}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Report preview failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function downloadOperatorReport({ incidentId, startDate, endDate, includeDiagnostics = false } = {}) {
+  const params = new URLSearchParams();
+  if (incidentId) params.set("incident_id", incidentId);
+  if (startDate) params.set("start_date", new Date(`${startDate}T00:00:00Z`).toISOString());
+  if (endDate) params.set("end_date", new Date(`${endDate}T23:59:59Z`).toISOString());
+  if (includeDiagnostics) params.set("include_diagnostics", "true");
+
+  const response = await fetch(`${BASE_URL}/audit/report/operator.pdf?${params}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Report generation failed: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = response.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/)?.[1] || "supply-chain-report.pdf";
+  link.click();
+  URL.revokeObjectURL(url);
+}

@@ -31,6 +31,7 @@ import SuppliersPage from "./components/suppliers/SuppliersPage.jsx";
 import AgentActivityPage from "./components/audit/AgentActivityPage.jsx";
 import DisruptionSimulatorPanel from "./components/simulator/DisruptionSimulatorPanel.jsx";
 import DiagnosticsPage from "./components/diagnostics/DiagnosticsPage.jsx";
+import ReportsPage from "./components/reports/ReportsPage.jsx";
 
 export default function App() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="/audit" element={<Navigate to="/agent-activity" replace />} />
               <Route path="/agent-activity" element={<AgentActivityPage />} />
               <Route path="/diagnostics" element={<DiagnosticsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
               <Route path="/simulator" element={<DisruptionSimulatorPanel />} />
             </Routes>
           </div>
