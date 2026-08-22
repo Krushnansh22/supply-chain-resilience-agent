@@ -50,6 +50,9 @@ app = FastAPI(
     title="Supply Chain Disruption Control Agent",
     description="Autonomous incident triage & multi-modal re-routing engine (HOP 2026)",
     version="0.1.0",
+    docs_url="/docs" if settings.DOCS_ENABLED else None,
+    redoc_url="/redoc" if settings.DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if settings.DOCS_ENABLED else None,
 )
 
 # ── Layer 1: Request body size limit (64 KB) ────────────────────────────────

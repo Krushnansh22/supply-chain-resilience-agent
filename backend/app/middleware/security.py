@@ -11,6 +11,7 @@ IMPORTANT: None of this changes business logic, DB models, or existing route beh
 """
 
 import logging
+import secrets
 from fastapi import Request, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -19,6 +20,11 @@ from starlette.responses import Response
 from app.config import settings
 
 logger = logging.getLogger("security")
+
+
+def _sanitize_log_str(val: str) -> str:
+    """Strip carriage returns, newlines, and control characters to prevent log injection."""
+    return "".join(ch for ch in val if ch.isprintable() and ch not in "\r\n")[:128]
 
 # ---------------------------------------------------------------------------
 # 1. HTTP Security Headers Middleware
@@ -90,9 +96,9 @@ class SecurityEventLoggerMiddleware(BaseHTTPMiddleware):
                 level,
                 "SECURITY_EVENT | status=%d | method=%s | path=%s | ip=%s",
                 response.status_code,
-                request.method,
-                request.url.path,
-                ip,
+                _sanitize_log_str(request.method),
+                _sanitize_log_str(request.url.path),
+                _sanitize_log_str(ip),
             )
 
         return response
@@ -118,9 +124,9 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
             from fastapi.responses import JSONResponse
             logger.warning(
                 "SECURITY_EVENT | OVERSIZED_REQUEST | content-length=%s | ip=%s | path=%s",
-                content_length,
-                request.client.host if request.client else "unknown",
-                request.url.path,
+                _sanitize_log_str(str(content_length)),
+                _sanitize_log_str(request.client.host if request.client else "unknown"),
+                _sanitize_log_str(request.url.path),
             )
             return JSONResponse(
                 status_code=413,
@@ -130,7 +136,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 
 
 # ---------------------------------------------------------------------------
-# 4. Optional API Key Dependency
+# 4. Optional API Key Dependency (Timing Attack Protected)
 # ---------------------------------------------------------------------------
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -142,6 +148,7 @@ async def require_api_key(api_key: str = Security(_api_key_header)) -> None:
 
     - If settings.API_KEY is empty (default): open access — safe for local dev/demo.
     - If settings.API_KEY is set in .env: all mutating endpoints require matching X-API-Key.
+    - Uses constant-time comparison (secrets.compare_digest) to prevent side-channel timing attacks.
 
     Usage:
         from app.middleware.security import require_api_key
@@ -150,7 +157,7 @@ async def require_api_key(api_key: str = Security(_api_key_header)) -> None:
     if not settings.API_KEY:
         return  # Open mode — API_KEY not configured
 
-    if not api_key or api_key != settings.API_KEY:
+    if not api_key or not secrets.compare_digest(api_key, settings.API_KEY):
         logger.warning("SECURITY_EVENT | INVALID_API_KEY | provided=%s", bool(api_key))
         raise HTTPException(
             status_code=401,

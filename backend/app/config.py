@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # Set API_KEY=your-secret in .env to enforce authentication.
     API_KEY: str = ""
 
+    # Controls whether interactive Swagger UI /docs and openapi.json are publicly accessible
+    DOCS_ENABLED: bool = True
+
     # --- Misc ---
     LOG_LEVEL: str = "INFO"
 
