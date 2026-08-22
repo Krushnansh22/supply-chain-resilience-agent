@@ -28,7 +28,7 @@ import io
 import secrets
 from datetime import datetime
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Any
 from pymongo.database import Database
@@ -479,8 +479,8 @@ def audit_report_csv(
     # Safe alphanumeric filename (blocks HTTP Response Header injection)
     safe_suffix = f"_{incident_id}" if incident_id else ""
     filename = f"audit_trail{safe_suffix}.csv"
-    return StreamingResponse(
-        io.BytesIO(output.getvalue().encode("utf-8")),
+    return Response(
+        content=output.getvalue().encode("utf-8"),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -511,16 +511,19 @@ def audit_report_pdf(
     logs = list(db["audit_logs"].find(query, {"_id": 0}).sort("timestamp", 1))
 
     # --------------- Build PDF ---------------
+    def _to_latin1(text: Any) -> str:
+        return str(text or "").encode("latin-1", "replace").decode("latin-1")
+
     pdf = FPDF(orientation="L", unit="mm", format="A4")
     pdf.set_auto_page_break(auto=True, margin=12)
     pdf.add_page()
 
     # Title
     pdf.set_font("Helvetica", "B", 14)
-    title = f"Supply Chain Resilience Agent — Audit Trail Report"
+    title = f"Supply Chain Resilience Agent - Audit Trail Report"
     if incident_id:
         title += f" [{incident_id}]"
-    pdf.cell(0, 10, title, ln=True, align="C")
+    pdf.cell(0, 10, _to_latin1(title), ln=True, align="C")
     pdf.set_font("Helvetica", "", 8)
     pdf.cell(0, 6, f"Generated: {datetime.utcnow().isoformat()} UTC  |  Total events: {len(logs)}", ln=True, align="C")
     pdf.ln(4)
@@ -547,17 +550,17 @@ def audit_report_pdf(
     fill = False
     for log in logs:
         row = [
-            str(log.get("event_id", ""))[:32],
-            str(log.get("correlation_id") or "")[:26],
-            str(log.get("timestamp", ""))[:40],
-            str(log.get("workflow", ""))[:26],
-            str(log.get("event_type", ""))[:28],
-            str(log.get("incident_id") or "")[:22],
-            str(log.get("entity_id") or "")[:20],
-            str(log.get("action") or "")[:18],
-            str(log.get("status", ""))[:14],
-            str(log.get("retry_count", "")),
-            str(log.get("reason") or log.get("error_details") or "")[:50],
+            _to_latin1(log.get("event_id", ""))[:32],
+            _to_latin1(log.get("correlation_id") or "")[:26],
+            _to_latin1(log.get("timestamp", ""))[:40],
+            _to_latin1(log.get("workflow", ""))[:26],
+            _to_latin1(log.get("event_type", ""))[:28],
+            _to_latin1(log.get("incident_id") or "")[:22],
+            _to_latin1(log.get("entity_id") or "")[:20],
+            _to_latin1(log.get("action") or "")[:18],
+            _to_latin1(log.get("status", ""))[:14],
+            _to_latin1(log.get("retry_count", "")),
+            _to_latin1(log.get("reason") or log.get("error_details") or "")[:50],
         ]
         pdf.set_fill_color(239, 246, 255) if fill else pdf.set_fill_color(255, 255, 255)
         for i, cell in enumerate(row):
@@ -573,8 +576,8 @@ def audit_report_pdf(
     statuses = {}
     workflows = {}
     for log in logs:
-        s = log.get("status", "UNKNOWN")
-        w = log.get("workflow", "UNKNOWN")
+        s = _to_latin1(log.get("status", "UNKNOWN"))
+        w = _to_latin1(log.get("workflow", "UNKNOWN"))
         statuses[s] = statuses.get(s, 0) + 1
         workflows[w] = workflows.get(w, 0) + 1
     for k, v in sorted(statuses.items()):
@@ -586,8 +589,8 @@ def audit_report_pdf(
     pdf_bytes = bytes(pdf.output())
     safe_suffix = f"_{incident_id}" if incident_id else ""
     filename = f"audit_trail{safe_suffix}.pdf"
-    return StreamingResponse(
-        io.BytesIO(pdf_bytes),
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

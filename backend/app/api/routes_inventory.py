@@ -5,6 +5,7 @@ Owner: Developer 2 (Backend / Simulation)
 REST surface for the `inventory` table. See docs/API_CONTRACTS.md for exact routes.
 """
 
+import math
 from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from pymongo.database import Database
 from pydantic import BaseModel, field_validator, Field
@@ -30,7 +31,8 @@ def list_inventory(db: Database = Depends(get_mongo_db)):
     out = []
     for r in rows:
         item = InventoryOut(**r)
-        item.days_of_supply = compute_days_of_supply(r["usable_stock"], r["daily_usage"])
+        dos = compute_days_of_supply(r["usable_stock"], r["daily_usage"])
+        item.days_of_supply = None if (dos is not None and math.isinf(dos)) else dos
         out.append(item)
     return out
 
@@ -46,7 +48,8 @@ def get_component(
     if not row:
         raise HTTPException(status_code=404, detail="component not found")
     item = InventoryOut(**row)
-    item.days_of_supply = compute_days_of_supply(row["usable_stock"], row["daily_usage"])
+    dos = compute_days_of_supply(row["usable_stock"], row["daily_usage"])
+    item.days_of_supply = None if (dos is not None and math.isinf(dos)) else dos
     return item
 
 
@@ -100,5 +103,6 @@ def adjust_inventory(
 
     updated_row = repo.get_by_component_id(component_id)
     item = InventoryOut(**updated_row)
-    item.days_of_supply = compute_days_of_supply(updated_row["usable_stock"], updated_row["daily_usage"])
+    dos = compute_days_of_supply(updated_row["usable_stock"], updated_row["daily_usage"])
+    item.days_of_supply = None if (dos is not None and math.isinf(dos)) else dos
     return item
