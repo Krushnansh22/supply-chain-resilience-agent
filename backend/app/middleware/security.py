@@ -5,7 +5,8 @@ Owner: Developer 2 (Backend / Simulation)
 Security middleware components:
   1. SecurityHeadersMiddleware — injects defensive HTTP response headers on every response.
   2. SecurityEventLoggerMiddleware — logs all 4xx/5xx responses with IP + path for monitoring.
-  3. require_api_key — optional FastAPI Depends() enforcing X-API-Key on mutating endpoints.
+  3. RequestSizeLimitMiddleware — counts actual streamed bytes and enforces body size limit (64 KB).
+  4. require_api_key — optional FastAPI Depends() enforcing X-API-Key with constant-time comparison.
 
 IMPORTANT: None of this changes business logic, DB models, or existing route behavior.
 """
@@ -15,9 +16,10 @@ import secrets
 from fastapi import Request, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from starlette.responses import Response, JSONResponse
 
 from app.config import settings
+from app.middleware.client_ip import get_trusted_client_ip
 
 logger = logging.getLogger("security")
 
@@ -25,6 +27,7 @@ logger = logging.getLogger("security")
 def _sanitize_log_str(val: str) -> str:
     """Strip carriage returns, newlines, and control characters to prevent log injection."""
     return "".join(ch for ch in val if ch.isprintable() and ch not in "\r\n")[:128]
+
 
 # ---------------------------------------------------------------------------
 # 1. HTTP Security Headers Middleware
@@ -44,7 +47,6 @@ SECURITY_HEADERS = {
     # Remove server fingerprint (replace default with opaque name).
     "Server": "scda",
     # Content Security Policy — restricts what sources the browser will load.
-    # 'self' + localhost for API + Vite dev server. Adjust for production domain.
     "Content-Security-Policy": (
         "default-src 'self'; "
         "connect-src 'self' http://localhost:8000 http://localhost:5173; "
@@ -54,7 +56,6 @@ SECURITY_HEADERS = {
         "frame-ancestors 'none';"
     ),
     # HTTP Strict Transport Security — forces HTTPS in production.
-    # max-age=31536000 = 1 year. includeSubDomains is intentionally omitted for local dev safety.
     "Strict-Transport-Security": "max-age=31536000",
     # Prevent browser from sending data cross-origin.
     "Cross-Origin-Opener-Policy": "same-origin",
@@ -80,17 +81,14 @@ class SecurityEventLoggerMiddleware(BaseHTTPMiddleware):
     """
     Logs every HTTP 4xx and 5xx response with IP, method, path, and status code.
     Provides a basic audit trail for detecting abuse, scanning, and auth failures.
-    Does NOT log request bodies or query params to avoid leaking sensitive data.
+    Uses get_trusted_client_ip to prevent spoofed X-Forwarded-For headers from polluting logs.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
         response = await call_next(request)
 
         if response.status_code >= 400:
-            ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-            if not ip:
-                ip = request.client.host if request.client else "unknown"
-
+            ip = get_trusted_client_ip(request)
             level = logging.WARNING if response.status_code < 500 else logging.ERROR
             logger.log(
                 level,
@@ -105,34 +103,88 @@ class SecurityEventLoggerMiddleware(BaseHTTPMiddleware):
 
 
 # ---------------------------------------------------------------------------
-# 3. Request Body Size Limiter
+# 3. Request Body Size Limiter (Stream-counting + Header check)
 # ---------------------------------------------------------------------------
 
-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+class RequestSizeLimitMiddleware:
     """
     Rejects requests with a body larger than max_bytes (default: 64 KB).
-    Prevents large-payload DoS attacks without needing a reverse proxy.
+    Counts actual body bytes streamed in (handles chunked transfer encoding and understated headers)
+    in addition to the fast-path Content-Length header check.
     """
 
     def __init__(self, app, max_bytes: int = 65_536):
-        super().__init__(app)
+        self.app = app
         self.max_bytes = max_bytes
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > self.max_bytes:
-            from fastapi.responses import JSONResponse
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Fast-path check: Content-Length header (cheap early rejection)
+        headers = dict(scope.get("headers", []))
+        content_length_raw = headers.get(b"content-length")
+        if content_length_raw:
+            try:
+                if int(content_length_raw.decode("latin1")) > self.max_bytes:
+                    logger.warning(
+                        "SECURITY_EVENT | OVERSIZED_REQUEST | content-length=%s | max_bytes=%d",
+                        _sanitize_log_str(content_length_raw.decode("latin1", errors="ignore")),
+                        self.max_bytes,
+                    )
+                    response = JSONResponse(
+                        status_code=413,
+                        content={"detail": f"Request body too large. Maximum allowed: {self.max_bytes} bytes."},
+                    )
+                    await response(scope, receive, send)
+                    return
+            except ValueError:
+                pass
+
+        # Stream-level byte counter: catches chunked encoding and missing/understated Content-Length
+        bytes_received = 0
+        chunks = []
+        oversized = False
+
+        while True:
+            message = await receive()
+            if message["type"] == "http.request":
+                body = message.get("body", b"")
+                bytes_received += len(body)
+                chunks.append(message)
+                if bytes_received > self.max_bytes:
+                    oversized = True
+                    break
+                if not message.get("more_body", False):
+                    break
+            elif message["type"] == "http.disconnect":
+                chunks.append(message)
+                break
+
+        if oversized:
             logger.warning(
-                "SECURITY_EVENT | OVERSIZED_REQUEST | content-length=%s | ip=%s | path=%s",
-                _sanitize_log_str(str(content_length)),
-                _sanitize_log_str(request.client.host if request.client else "unknown"),
-                _sanitize_log_str(request.url.path),
+                "SECURITY_EVENT | OVERSIZED_STREAM | bytes_received=%d | max_bytes=%d",
+                bytes_received,
+                self.max_bytes,
             )
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=413,
                 content={"detail": f"Request body too large. Maximum allowed: {self.max_bytes} bytes."},
             )
-        return await call_next(request)
+            await response(scope, receive, send)
+            return
+
+        # Replay the chunks to the downstream application
+        chunk_iter = iter(chunks)
+
+        async def replay_receive():
+            try:
+                return next(chunk_iter)
+            except StopIteration:
+                return {"type": "http.request", "body": b"", "more_body": False}
+
+        await self.app(scope, replay_receive, send)
 
 
 # ---------------------------------------------------------------------------

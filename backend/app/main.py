@@ -9,15 +9,15 @@ RECEIVES: nothing (this is the process entrypoint)
 DELIVERS: the running HTTP API that Dev4's frontend and Dev1's agent both talk to.
 
 SECURITY LAYERS (all non-breaking):
-  Layer 1 — RequestSizeLimitMiddleware : reject payloads > 64 KB (DoS protection)
-  Layer 2 — SecurityHeadersMiddleware  : X-Frame-Options, CSP, HSTS, etc. on all responses
-  Layer 3 — SecurityEventLoggerMiddleware : log all 4xx/5xx events with IP for monitoring
-  Layer 4 — CORSMiddleware             : restricted origins, methods, and headers
-  Layer 5 — Global 500 handler         : never leak raw tracebacks to API clients
-  Layer 6 — Custom 422 handler         : sanitize validation error output
-  Layer 7 — Path param regex           : per-route, blocks injection/traversal (see routes_*)
-  Layer 8 — API Key dependency         : opt-in via settings.API_KEY on mutating endpoints
-  Layer 9 — Rate limiting              : opt-in per endpoint via rate_limiter.check_rate_limit()
+  Layer 1 — RequestSizeLimitMiddleware : reject bodies > 64 KB (header + streaming check)
+  Layer 2 — GeneralRateLimitMiddleware : global sliding-window rate limit (60/60s, /health exempt)
+  Layer 3 — SecurityHeadersMiddleware  : X-Frame-Options, CSP, HSTS, etc. on all responses
+  Layer 4 — SecurityEventLoggerMiddleware : log all 4xx/5xx events with IP for monitoring
+  Layer 5 — CORSMiddleware             : restricted origins, methods, and headers
+  Layer 6 — Global 500 handler         : never leak raw tracebacks to API clients
+  Layer 7 — Custom 422 handler         : sanitize validation error output
+  Layer 8 — Path param regex           : per-route, blocks injection/traversal (see routes_*)
+  Layer 9 — API Key dependency         : opt-in via settings.API_KEY on mutating endpoints
 """
 
 import logging
@@ -33,6 +33,7 @@ from app.middleware.security import (
     SecurityEventLoggerMiddleware,
     RequestSizeLimitMiddleware,
 )
+from app.middleware.general_rate_limiter import GeneralRateLimitMiddleware
 
 from app.api import (
     routes_inventory,
@@ -55,16 +56,19 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.DOCS_ENABLED else None,
 )
 
-# ── Layer 1: Request body size limit (64 KB) ────────────────────────────────
+# ── Layer 1: Request body size limit (64 KB, stream counting + header check) ─
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=65_536)
 
-# ── Layer 2: Security headers on every response ──────────────────────────────
+# ── Layer 2: Global general rate limiter (60 req/60s across all routes, /health exempt) ──
+app.add_middleware(GeneralRateLimitMiddleware)
+
+# ── Layer 3: Security headers on every response ──────────────────────────────
 app.add_middleware(SecurityHeadersMiddleware)
 
-# ── Layer 3: Security event logger (4xx / 5xx monitoring) ────────────────────
+# ── Layer 4: Security event logger (4xx / 5xx monitoring) ────────────────────
 app.add_middleware(SecurityEventLoggerMiddleware)
 
-# ── Layer 4: CORS — restricted to known origins and explicit HTTP methods ─────
+# ── Layer 5: CORS — restricted to known origins and explicit HTTP methods ─────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -74,7 +78,7 @@ app.add_middleware(
 )
 
 
-# ── Layer 5: Global 500 handler — never leak tracebacks ──────────────────────
+# ── Layer 6: Global 500 handler — never leak tracebacks ──────────────────────
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled server error on %s %s", request.method, request.url.path)
@@ -84,7 +88,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
-# ── Layer 6: Custom 422 handler — sanitize validation errors ──────────────────
+# ── Layer 7: Custom 422 handler — sanitize validation errors ──────────────────
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     """
