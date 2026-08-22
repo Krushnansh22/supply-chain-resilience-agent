@@ -15,7 +15,7 @@ DELIVERS:
 """
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo.database import Database
 
 from app.schemas.tool_io import ToolResult
@@ -25,29 +25,49 @@ from app.schemas.recovery_plan import RecoveryPlanOption
 def update_erp(incident_id: str, option: RecoveryPlanOption, db: Database) -> ToolResult:
     """
     Executes an approved recovery plan option:
-    1. Creates a new PurchaseOrder row for each allocation.
-    2. Updates Inventory.usable_stock to reflect incoming stock commitment.
-    3. Marks the source incident as RESOLVED.
+    1. Validates the incident exists.
+    2. Creates a new PurchaseOrder row for each allocation.
+    3. Updates Inventory.usable_stock to reflect incoming stock commitment.
+    4. Marks the source incident as RESOLVED.
     """
+    incident = db["incidents"].find_one({"incident_id": incident_id})
+    if not incident:
+        return ToolResult(
+            tool_name="update_erp",
+            success=False,
+            error=f"Incident '{incident_id}' not found.",
+            summary=f"ERP update aborted: incident '{incident_id}' does not exist.",
+        )
+
+    component_id = incident.get("affected_component") or "UNKNOWN"
     created_pos = []
 
     for allocation in option.allocations:
         po_id = f"PO-{uuid.uuid4().hex[:6].upper()}"
-        expected_delivery = datetime.utcnow() + timedelta(days=allocation.delivery_days)
+        expected_delivery = datetime.now(timezone.utc) + timedelta(days=allocation.delivery_days)
 
-        component_id = _get_component_for_incident(incident_id, db)
-        db["purchase_orders"].insert_one({"po_id": po_id, "component_id": component_id, "supplier_id": allocation.supplier_id, "quantity": allocation.quantity, "unit_price": allocation.unit_price, "expected_delivery": expected_delivery, "status": "OPEN"})
+        db["purchase_orders"].insert_one({
+            "po_id": po_id,
+            "component_id": component_id,
+            "supplier_id": allocation.supplier_id,
+            "quantity": allocation.quantity,
+            "unit_price": allocation.unit_price,
+            "expected_delivery": expected_delivery,
+            "status": "OPEN",
+        })
         created_pos.append(po_id)
 
         # Reflect incoming stock commitment in usable_stock
-        inv = db["inventory"].find_one({"component_id": component_id})
-        if inv:
-            db["inventory"].update_one({"component_id": component_id}, {"$inc": {"usable_stock": allocation.quantity}})
+        if component_id != "UNKNOWN":
+            inv = db["inventory"].find_one({"component_id": component_id})
+            if inv:
+                db["inventory"].update_one(
+                    {"component_id": component_id},
+                    {"$inc": {"usable_stock": allocation.quantity}},
+                )
 
     # Mark incident as RESOLVED
-    incident = db["incidents"].find_one({"incident_id": incident_id})
-    if incident:
-        db["incidents"].update_one({"incident_id": incident_id}, {"$set": {"status": "RESOLVED"}})
+    db["incidents"].update_one({"incident_id": incident_id}, {"$set": {"status": "RESOLVED"}})
 
     total_cost = option.total_cost
     return ToolResult(

@@ -15,7 +15,7 @@ IMPORTANT (team doc Section 14): action/result/reason must be safe, human-readab
 summaries — NEVER paste raw LLM chain-of-thought here.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from pymongo.database import Database
 
@@ -29,7 +29,7 @@ def log_event(
     decision: Optional[str] = None,
     reason: Optional[str] = None,
 ) -> dict:
-    entry = {"timestamp": datetime.utcnow(), "incident_id": incident_id, "action": action, "tool": tool, "result": result, "decision": decision, "reason": reason}
+    entry = {"timestamp": datetime.now(timezone.utc), "incident_id": incident_id, "action": action, "tool": tool, "result": result, "decision": decision, "reason": reason}
     db["audit_logs"].insert_one(entry)
     return entry
 

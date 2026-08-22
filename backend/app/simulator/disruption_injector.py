@@ -11,7 +11,7 @@ DELIVERS: a new Incident row, status=DETECTED, ready for the agent loop to pick 
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo.database import Database
 
 SCENARIO_DEFAULTS = {
@@ -36,7 +36,7 @@ def inject_scenario(scenario: str, db: Database) -> dict:
     contradicting data (dispatch claim vs NO_PICKUP_SCAN tracking status).
     """
     defaults = SCENARIO_DEFAULTS[scenario]
-    incident = {"incident_id": f"INC-{uuid.uuid4().hex[:6].upper()}", "status": "DETECTED", "created_at": datetime.utcnow(), **defaults}
+    incident = {"incident_id": f"INC-{uuid.uuid4().hex[:6].upper()}", "status": "DETECTED", "created_at": datetime.now(timezone.utc), **defaults}
     db["incidents"].insert_one(incident)
 
     # Register lie scenario so simulator returns contradicting data

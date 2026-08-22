@@ -34,7 +34,7 @@ def get_production_orders(component_id: str, db: Database, days_of_supply: float
     results = []
     for r in rows:
         risk = assess_production_risk(
-            production_id=r.production_id,
+            production_id=r["production_id"],
             days_of_supply=days_of_supply,
             deadline=r.get("deadline"),
             priority=r["priority"],
