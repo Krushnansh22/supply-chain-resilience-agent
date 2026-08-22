@@ -91,3 +91,137 @@ body {
 .badge-high     { background: color-mix(in srgb, var(--status-high) 20%, transparent); color: var(--status-high); }
 .badge-medium   { background: color-mix(in srgb, var(--status-medium) 20%, transparent); color: var(--status-medium); }
 .badge-low      { background: color-mix(in srgb, var(--status-low) 20%, transparent); color: var(--status-low); }
+.badge-info     { background: color-mix(in srgb, var(--status-info) 20%, transparent); color: var(--status-info); }
+.badge-neutral  { background: color-mix(in srgb, var(--text-secondary) 18%, transparent); color: var(--text-secondary); }
+
+/* ---------------------------------------------------------------------- */
+/* Added by Developer 4 — layout/typography/interactive primitives so     */
+/* every page (KPIs, tables, buttons, cards) shares one visual language   */
+/* instead of ad-hoc inline styles. Components should prefer these        */
+/* classes over one-off inline styling wherever practical.                */
+/* ---------------------------------------------------------------------- */
+
+h1, h2, h3 { font-weight: 600; letter-spacing: -0.01em; margin: 0 0 var(--space-2) 0; }
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.page-header h1 { font-size: 22px; }
+.page-header .page-subtitle { color: var(--text-secondary); font-size: 13px; margin-top: 2px; }
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.kpi-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-dim);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+.kpi-card.tone-critical { border-left-color: var(--status-critical); }
+.kpi-card.tone-high { border-left-color: var(--status-high); }
+.kpi-card.tone-info { border-left-color: var(--status-info); }
+.kpi-card .kpi-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.kpi-card .kpi-value { font-size: 30px; font-weight: 600; margin-top: 4px; }
+.kpi-card .kpi-hint { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+
+button, .btn {
+  background: var(--bg-panel-raised);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+button:hover, .btn:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.btn-primary { background: var(--accent-dim); border-color: var(--accent); color: var(--text-primary); }
+button.btn-approve { background: color-mix(in srgb, var(--status-low) 18%, transparent); border-color: var(--status-low); color: var(--status-low); }
+button.btn-reject { background: color-mix(in srgb, var(--status-critical) 18%, transparent); border-color: var(--status-critical); color: var(--status-critical); }
+button.btn-ghost { background: transparent; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.data-table td { padding: 10px 10px; border-bottom: 1px solid var(--border-subtle); }
+.data-table tbody tr { transition: background 0.15s ease; }
+.data-table tbody tr:hover { background: var(--bg-panel-raised); }
+.data-table tbody tr:last-child td { border-bottom: none; }
+
+.link-row {
+  display: block;
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  text-decoration: none;
+  color: inherit;
+}
+.link-row:last-child { border-bottom: none; }
+.link-row:hover { background: var(--bg-panel-raised); }
+
+.empty-state {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: var(--space-3) 0;
+}
+
+.error-banner {
+  background: color-mix(in srgb, var(--status-critical) 12%, transparent);
+  border: 1px solid var(--status-critical);
+  color: var(--status-critical);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  font-size: 13px;
+  margin-top: var(--space-2);
+}
+
+.pill-filter {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: transparent;
+}
+.pill-filter.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+.flow-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+.flow-strip .flow-step { padding: 3px 8px; border-radius: 4px; background: var(--bg-panel-raised); }
+.flow-strip .flow-step.active { color: var(--accent); background: var(--accent-dim); }
+.flow-strip .flow-sep { color: var(--border-subtle); }

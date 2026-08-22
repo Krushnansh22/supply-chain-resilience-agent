@@ -1,12 +1,15 @@
 /**
  * src/components/layout/Sidebar.jsx
  * Owner: Developer 4 (Frontend)
- * Navigation per team doc Section 11: Overview / Incidents / Inventory / Production / Suppliers / Audit
+ * Navigation per team doc Section 11: Overview / Incidents / Approvals /
+ * Inventory / Production / Suppliers / Audit / Simulator
  */
 import { NavLink } from "react-router-dom";
 
 const NAV_ITEMS = [
   { to: "/", label: "🏠 Overview", end: true },
+  { to: "/incidents", label: "🚨 Incidents" },
+  { to: "/approvals", label: "✅ Approvals" },
   { to: "/inventory", label: "📦 Inventory" },
   { to: "/production", label: "🏭 Production" },
   { to: "/suppliers", label: "🏢 Suppliers" },
@@ -33,8 +36,6 @@ export default function Sidebar() {
           {item.label}
         </NavLink>
       ))}
-      {/* 🚨 Incidents deliberately has no static nav link — judges reach an incident
-          via the Overview's Active Incidents list, matching docs Section 13 flow. */}
     </nav>
   );
 }

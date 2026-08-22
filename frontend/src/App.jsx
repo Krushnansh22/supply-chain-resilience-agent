@@ -5,7 +5,9 @@
  * Top-level router + layout shell for the Control Tower (team doc Section 11).
  * Sidebar sections map 1:1 to backend routers:
  *   Overview -> /incidents + /audit (activity feed)
- *   Incidents -> /incidents/{id}, /agent/state/{id}, /agent/plan/{id}
+ *   Incidents (list) -> /incidents, /production (display join)
+ *   Incidents (detail) -> /incidents/{id}, /agent/state/{id}, /agent/plan/{id}
+ *   Approvals -> /incidents (filtered WAITING_APPROVAL) + /agent/plan/{id}
  *   Inventory -> /inventory
  *   Production -> /production
  *   Suppliers -> /suppliers
@@ -20,7 +22,9 @@ import Sidebar from "./components/layout/Sidebar.jsx";
 import TopBar from "./components/layout/TopBar.jsx";
 
 import OverviewDashboard from "./components/overview/OverviewDashboard.jsx";
+import IncidentsListPage from "./components/incidents/IncidentsListPage.jsx";
 import IncidentCommandCenter from "./components/incidents/IncidentCommandCenter.jsx";
+import ApprovalsPage from "./components/approvals/ApprovalsPage.jsx";
 import InventoryPage from "./components/inventory/InventoryPage.jsx";
 import ProductionPage from "./components/production/ProductionPage.jsx";
 import SuppliersPage from "./components/suppliers/SuppliersPage.jsx";
@@ -37,7 +41,9 @@ export default function App() {
           <div className="app-content">
             <Routes>
               <Route path="/" element={<OverviewDashboard />} />
+              <Route path="/incidents" element={<IncidentsListPage />} />
               <Route path="/incidents/:incidentId" element={<IncidentCommandCenter />} />
+              <Route path="/approvals" element={<ApprovalsPage />} />
               <Route path="/inventory" element={<InventoryPage />} />
               <Route path="/production" element={<ProductionPage />} />
               <Route path="/suppliers" element={<SuppliersPage />} />
