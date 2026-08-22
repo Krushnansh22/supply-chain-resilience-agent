@@ -20,7 +20,7 @@ SECURITY ADDITIONS (Dev2):
 
 from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel, ConfigDict, field_validator, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -107,6 +107,7 @@ def approve_plan(
     _auth: None = Depends(require_api_key),
 ):
     """
+    Coordinator approves the recommended recovery plan.
     On approval, transition state WAITING_APPROVAL -> EXECUTING.
     Rate limited: 10 approvals per minute per IP.
     """
@@ -117,10 +118,10 @@ def approve_plan(
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.EXECUTING.value}})
     db["agent_sessions"].update_one(
         {"incident_id": decision.incident_id},
-        {"$set": {"state": AgentState.EXECUTING.value, "updated_at": datetime.utcnow()}, "$inc": {"revision": 1}},
+        {"$set": {"state": AgentState.EXECUTING.value, "updated_at": datetime.now(timezone.utc)}, "$inc": {"revision": 1}},
         upsert=True,
     )
-    db["audit_logs"].insert_one({"timestamp": datetime.utcnow(), "incident_id": decision.incident_id, "action": "Recovery plan approved by coordinator.", "decision": "APPROVED"})
+    db["audit_logs"].insert_one({"timestamp": datetime.now(timezone.utc), "incident_id": decision.incident_id, "action": "Recovery plan approved by coordinator.", "decision": "APPROVED"})
     return {"incident_id": decision.incident_id, "state": AgentState.EXECUTING.value}
 
 
@@ -142,8 +143,8 @@ def reject_plan(
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.REPLANNING.value}})
     db["agent_sessions"].update_one(
         {"incident_id": decision.incident_id},
-        {"$set": {"state": AgentState.REPLANNING.value, "updated_at": datetime.utcnow()}, "$inc": {"revision": 1}},
+        {"$set": {"state": AgentState.REPLANNING.value, "updated_at": datetime.now(timezone.utc)}, "$inc": {"revision": 1}},
         upsert=True,
     )
-    db["audit_logs"].insert_one({"timestamp": datetime.utcnow(), "incident_id": decision.incident_id, "action": "Recovery plan rejected; replanning required.", "decision": "REJECTED"})
+    db["audit_logs"].insert_one({"timestamp": datetime.now(timezone.utc), "incident_id": decision.incident_id, "action": "Recovery plan rejected; replanning required.", "decision": "REJECTED"})
     return {"incident_id": decision.incident_id, "state": AgentState.REPLANNING.value}
