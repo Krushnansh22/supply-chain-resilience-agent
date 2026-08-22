@@ -12,7 +12,6 @@ DELIVERS: dict payloads consumed directly by those tools (no DB writes here — 
 """
 
 import random
-from sqlalchemy.orm import Session
 
 # In-memory registry: incident_id -> scenario type
 # Set by disruption_injector when a scenario is injected.

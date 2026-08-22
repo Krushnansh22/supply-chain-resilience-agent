@@ -12,10 +12,10 @@ Contains inconsistent, erroneous, anomalous, and edge-case data for testing:
 All collections seeded here are intentionally broken for workflow testing.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo.database import Database
 
-NOW = datetime.utcnow()
+NOW = datetime.now(timezone.utc)
 
 
 def inject_broken_data(db: Database) -> None:

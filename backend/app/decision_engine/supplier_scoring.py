@@ -43,10 +43,14 @@ def score_supplier(
     TODO (Dev3): replace naive linear normalization below with whatever the team
     agrees is fair; keep return shape (ScoredSupplier) stable for recovery_planner.py.
     """
-    quality_norm = quality_score / 100
-    reliability_norm = reliability_score / 100
+    quality_norm = quality_score if 0 <= quality_score <= 1.0 else min(1.0, quality_score / 100)
+    reliability_norm = reliability_score if 0 <= reliability_score <= 1.0 else min(1.0, reliability_score / 100)
     delivery_norm = max(0.0, 1 - (delivery_days / max(max_acceptable_delivery_days, 1)))
-    cost_norm = max(0.0, 1 - (unit_price / max(max_acceptable_price, 1)))
+    cost_norm = (
+        max(0.0, 1 - (unit_price / max(max_acceptable_price, 1)))
+        if max_acceptable_price != float("inf")
+        else 1.0
+    )
 
     breakdown = {
         "quality": quality_norm * WEIGHTS["quality"],

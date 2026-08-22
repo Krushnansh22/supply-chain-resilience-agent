@@ -20,45 +20,68 @@ from app.schemas.tool_io import ToolResult
 
 def execute_tool(tool_name: str, tool_input: dict, db: Database) -> ToolResult:
     """
-    TODO (Dev1): expand this dispatch table as tools are finalized. `build_recovery_plan`
-    is intentionally more involved since it needs RFQ rows already persisted by a prior
-    request_rfq call — coordinate the exact flow with Dev3.
+    Executes a tool call by name with input parameters and DB session.
+    Guards against missing keys or runtime exceptions with graceful ToolResult errors.
     """
-    if tool_name == "get_inventory":
-        return inventory_tools.get_inventory(tool_input["component_id"], db)
+    try:
+        if tool_name == "get_inventory":
+            return inventory_tools.get_inventory(tool_input["component_id"], db)
 
-    if tool_name == "get_production_orders":
-        return production_tools.get_production_orders(tool_input["component_id"], db)
+        if tool_name == "get_production_orders":
+            return production_tools.get_production_orders(tool_input["component_id"], db)
 
-    if tool_name == "get_supplier":
-        return supplier_tools.get_supplier(tool_input["supplier_id"], db)
+        if tool_name == "get_supplier":
+            return supplier_tools.get_supplier(tool_input["supplier_id"], db)
 
-    if tool_name == "send_supplier_message":
-        return supplier_tools.send_supplier_message(
-            tool_input["supplier_id"], tool_input["po_id"], tool_input["message"], db
+        if tool_name == "send_supplier_message":
+            return supplier_tools.send_supplier_message(
+                tool_input["supplier_id"], tool_input["po_id"], tool_input["message"], db
+            )
+
+        if tool_name == "get_tracking_status":
+            return supplier_tools.get_tracking_status(tool_input["po_id"], db)
+
+        if tool_name == "request_rfq":
+            return rfq_tools.request_rfq(
+                tool_input["component_id"], tool_input["quantity"], tool_input["supplier_ids"], db
+            )
+
+        if tool_name == "check_approval":
+            return approval_tools.check_approval(tool_input["cost"])
+
+        if tool_name == "build_recovery_plan":
+            return ToolResult(
+                tool_name=tool_name,
+                success=False,
+                error="build_recovery_plan is orchestrated directly via /agent/plan or n8n workflow",
+                summary="Recovery plan generation is handled via workflow orchestrator.",
+            )
+
+        if tool_name == "update_erp":
+            return ToolResult(
+                tool_name=tool_name,
+                success=False,
+                error="update_erp requires approved RecoveryPlanOption",
+                summary="Direct ERP updates require an approved plan option.",
+            )
+
+        return ToolResult(
+            tool_name=tool_name,
+            success=False,
+            error=f"Unknown tool '{tool_name}'",
+            summary=f"Unknown tool requested: {tool_name}",
         )
-
-    if tool_name == "get_tracking_status":
-        return supplier_tools.get_tracking_status(tool_input["po_id"], db)
-
-    if tool_name == "request_rfq":
-        return rfq_tools.request_rfq(
-            tool_input["component_id"], tool_input["quantity"], tool_input["supplier_ids"], db
+    except KeyError as e:
+        return ToolResult(
+            tool_name=tool_name,
+            success=False,
+            error=f"Missing required parameter: {e}",
+            summary=f"Tool {tool_name} failed: missing required parameter {e}.",
         )
-
-    if tool_name == "check_approval":
-        return approval_tools.check_approval(tool_input["cost"])
-
-    if tool_name == "build_recovery_plan":
-        # TODO (Dev1 + Dev3): fetch relevant RFQ rows for this incident's component,
-        # call decision_engine.recovery_planner.build_recovery_plan(), wrap result in ToolResult.
-        raise NotImplementedError("TODO: wire build_recovery_plan tool to recovery_planner.py")
-
-    if tool_name == "update_erp":
-        # TODO (Dev1 + Dev2): look up the RecoveryPlanOption by option_id (needs to be
-        # cached/stored somewhere after build_recovery_plan — e.g. in-memory dict keyed
-        # by incident_id, or a new DB table; decide with Dev2/Dev3) then call erp_tools.update_erp.
-        raise NotImplementedError("TODO: wire update_erp tool")
-
-    return ToolResult(tool_name=tool_name, success=False, error="unknown tool",
-                       summary=f"Unknown tool requested: {tool_name}")
+    except Exception as e:
+        return ToolResult(
+            tool_name=tool_name,
+            success=False,
+            error=str(e),
+            summary=f"Tool {tool_name} encountered an error: {e}",
+        )

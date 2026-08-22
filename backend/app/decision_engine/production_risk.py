@@ -14,7 +14,7 @@ DELIVERS: risk level consumed by:
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -38,7 +38,15 @@ def assess_production_risk(
     simple — replace with whatever scoring the team agrees on, but keep the
     function signature stable since Dev1's agent + Dev2's tools already call it.
     """
-    now = now or datetime.utcnow()
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    if deadline is not None:
+        if now.tzinfo is not None and deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        elif now.tzinfo is None and deadline.tzinfo is not None:
+            now = now.replace(tzinfo=timezone.utc)
+
     required_lead_time_days = max((deadline - now).days, 0) if deadline else 0
 
     if days_of_supply < required_lead_time_days:
