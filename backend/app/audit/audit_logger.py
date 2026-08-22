@@ -16,18 +16,20 @@ summaries — NEVER paste raw LLM chain-of-thought here.
 """
 
 from datetime import datetime
+from typing import Optional
 from pymongo.database import Database
 
 
 def log_event(
     db: Database,
-    incident_id: str | None,
+    incident_id: Optional[str],
     action: str,
-    tool: str | None = None,
-    result: str | None = None,
-    decision: str | None = None,
-    reason: str | None = None,
+    tool: Optional[str] = None,
+    result: Optional[str] = None,
+    decision: Optional[str] = None,
+    reason: Optional[str] = None,
 ) -> dict:
     entry = {"timestamp": datetime.utcnow(), "incident_id": incident_id, "action": action, "tool": tool, "result": result, "decision": decision, "reason": reason}
     db["audit_logs"].insert_one(entry)
     return entry
+

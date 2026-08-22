@@ -13,10 +13,10 @@ DELIVERS: imported by agent_loop.py to drive the state machine, and mirrored in
 See docs/AGENT_STATE_MACHINE.md for the full transition diagram.
 """
 
-from enum import StrEnum
+from enum import Enum
 
 
-class AgentState(StrEnum):
+class AgentState(str, Enum):
     DETECTED = "DETECTED"
     INVESTIGATING = "INVESTIGATING"
     SUPPLIER_CONTACT = "SUPPLIER_CONTACT"
