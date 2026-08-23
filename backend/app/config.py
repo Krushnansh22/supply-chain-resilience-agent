@@ -57,12 +57,18 @@ class Settings(BaseSettings):
 
     # ── CORS ───────────────────────────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:5173"
-    CORS_ALLOWED_METHODS: str = "GET,POST,OPTIONS"
+    CORS_ALLOWED_METHODS: str = "GET,POST,PUT,DELETE,OPTIONS"
 
     # ── Security ───────────────────────────────────────────────────────────────
     # Legacy API_KEY: used as fallback by routes_integrations.verify_api_key.
     # Prefer BACKEND_API_KEY for all new endpoints.
     API_KEY: str = ""
+
+    # ── JWT Authentication ─────────────────────────────────────────────────────
+    # MUST be set to a strong random secret in production.
+    # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+    JWT_SECRET: str = "supply-chain-jwt-secret-change-in-production-abc123xyz"
+    JWT_EXPIRE_MINUTES: int = 1440  # 24 hours
 
     # Controls whether Swagger UI (/docs) and /openapi.json are publicly accessible.
     DOCS_ENABLED: bool = True

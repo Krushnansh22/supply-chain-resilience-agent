@@ -16,6 +16,7 @@ from app.schemas.common import InventoryOut
 from app.decision_engine.inventory_calc import compute_days_of_supply
 from app.middleware.security import require_api_key
 from app.middleware.rate_limiter import check_rate_limit
+from app.core.deps import get_current_user, require_admin_or_user
 
 router = APIRouter()
 
@@ -24,7 +25,10 @@ _ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
 @router.get("/", response_model=list[InventoryOut])
-def list_inventory(db: Database = Depends(get_mongo_db)):
+def list_inventory(
+    db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(get_current_user),
+):
     """GET /inventory -> all components with computed days_of_supply."""
     repo = InventoryRepository(db)
     rows = repo.list_all()
@@ -41,6 +45,7 @@ def list_inventory(db: Database = Depends(get_mongo_db)):
 def get_component(
     component_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(get_current_user),
 ):
     """GET /inventory/{component_id}"""
     repo = InventoryRepository(db)
@@ -74,11 +79,12 @@ def adjust_inventory(
     component_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     req: AdjustRequest = ...,
     db: Database = Depends(get_mongo_db),
-    _auth: None = Depends(require_api_key),
+    current_user: dict = Depends(require_admin_or_user),
 ):
     """
     POST /inventory/{component_id}/adjust
     Adjusts usable_stock by delta. Rate limited: 30/min per IP.
+    Only internal Admins or Procurement Users can adjust stock.
     """
     check_rate_limit(request, bucket="inventory_adjust", max_calls=30, window_seconds=60)
 

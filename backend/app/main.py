@@ -54,6 +54,7 @@ from app.api import (
     routes_agent,
     routes_simulator,
     routes_integrations,
+    routes_auth,
 )
 from app.routers import config as config_router
 
@@ -101,8 +102,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=settings.cors_allowed_methods_list,   # GET, POST, OPTIONS
-    allow_headers=["Content-Type", "Accept", "X-API-Key"],
+    allow_methods=settings.cors_allowed_methods_list,
+    allow_headers=["Content-Type", "Accept", "X-API-Key", "Authorization"],
+    expose_headers=["Set-Cookie"],
 )
 
 
@@ -142,6 +144,9 @@ def health():
 
 
 # --- Mount all routers. Prefixes MUST match docs/API_CONTRACTS.md exactly. ---
+# --- Authentication (public endpoints — no auth dependency) ---
+app.include_router(routes_auth.router, prefix="/auth", tags=["Auth"])
+# --- Core data routes ---
 app.include_router(routes_inventory.router, prefix="/inventory", tags=["Inventory"])
 app.include_router(routes_suppliers.router, prefix="/suppliers", tags=["Suppliers"])
 app.include_router(routes_production.router, prefix="/production", tags=["Production"])
