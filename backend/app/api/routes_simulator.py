@@ -10,7 +10,7 @@ from pymongo.database import Database
 from app.mongo_database import get_mongo_db
 from app.schemas.common import IncidentOut
 from app.simulator.disruption_injector import inject_scenario, SCENARIO_DEFAULTS
-from app.middleware.security import require_api_key
+from app.middleware.security import require_api_key_or_user
 from app.middleware.rate_limiter import check_rate_limit
 
 router = APIRouter()
@@ -39,7 +39,7 @@ def inject(
     req: InjectRequest,
     request: Request,
     db: Database = Depends(get_mongo_db),
-    _auth: None = Depends(require_api_key),
+    _auth: None = Depends(require_api_key_or_user),
 ):
     """
     POST /simulator/inject {"scenario": "SUPPLIER_DELAY"} -> creates a new incident.
