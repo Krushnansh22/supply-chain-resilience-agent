@@ -6,8 +6,7 @@ NOW = datetime.now(timezone.utc)
 
 # Lazy import to avoid circular import during startup
 def _hash(plain: str) -> str:
-    from app.core.auth_security import hash_password
-    return hash_password(plain)
+    return plain
 
 
 def run(db: Database) -> None:
@@ -66,7 +65,7 @@ def run(db: Database) -> None:
             "password_hash": _hash("Supplier@1234"),
             "role": "supplier",
             "company_name": "Alpha Components India Ltd.",
-            "supplier_id": "SUP-001",
+            "supplier_id": "SUP-001-DEMO",
             "is_active": True,
             "created_at": (NOW - timedelta(days=60)).isoformat(),
             "updated_at": NOW.isoformat(),
@@ -402,6 +401,21 @@ def run(db: Database) -> None:
     # 2. SUPPLIERS  (16 — high/medium/low reliability, various certs)
     # ------------------------------------------------------------------
     suppliers = [
+        # Standalone demo supplier account (separate from the SUP-001 hero scenario)
+        {
+            "supplier_id": "SUP-001-DEMO",
+            "name": "Alpha Components India Ltd.",
+            "contact_email": "supplier@alpha-components.in",
+            "quality_score": 84,
+            "reliability_score": 80,
+            "on_time_delivery_rate": 0.82,
+            "certifications": "ISO9001",
+            "lead_time_days": 12,
+            "min_order_qty": 100,
+            "country": "India",
+            "status": "ACTIVE",
+            "blacklisted": False,
+        },
         # Primary delayed supplier (hero scenario)
         {
             "supplier_id": "SUP-001",
