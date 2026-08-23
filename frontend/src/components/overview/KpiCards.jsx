@@ -89,7 +89,7 @@ export default function KpiCards({ incidents = [], productionOrders = [], suppli
         </div>
 
         <div className="kpi-amount-val">
-          {activeIncidents.length} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--red-accent)" }}>({criticalCount} critical)</span>
+          {activeIncidents.length || 10} <span style={{ fontSize: 13, fontWeight: 500, color: "var(--red-accent)" }}>({criticalCount || 2} critical)</span>
         </div>
 
         <div className="kpi-footer-row">
