@@ -40,7 +40,7 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
     inventory_broken = [
         # Negative stock — impossible in reality, LLM should flag
         {
-            "component_id": "BROKEN-001",
+            "component_id": "CMP-BRK-001",
             "name": "Corrupted Component Alpha",
             "current_stock": -50,
             "usable_stock": -50,
@@ -53,27 +53,27 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
         },
         # Stock exists but zero daily usage and no production orders — orphaned
         {
-            "component_id": "BROKEN-002",
+            "component_id": "CMP-BRK-002",
             "name": "Orphaned Component Beta",
             "current_stock": 999,
             "usable_stock": 999,
             "daily_usage": 0.0,
             "safety_stock": 0,
             "days_of_supply": None,
-            "location": "Warehouse-A",
+            "location": "Warehouse-Dallas-TX",
             "anomaly": "ORPHANED_STOCK",
             "last_updated": (NOW - timedelta(days=180)).isoformat(),
         },
         # Usable stock higher than current stock — data integrity error
         {
-            "component_id": "BROKEN-003",
+            "component_id": "CMP-BRK-003",
             "name": "Integrity Error Component",
             "current_stock": 100,
             "usable_stock": 150,  # usable > current — impossible
             "daily_usage": 20.0,
             "safety_stock": 50,
             "days_of_supply": 5,
-            "location": "Warehouse-B",
+            "location": "Warehouse-Frankfurt-DE",
             "anomaly": "USABLE_EXCEEDS_CURRENT",
             "last_updated": NOW.isoformat(),
         },
@@ -92,8 +92,8 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
     supplier_broken = [
         # Missing contact — cannot send RFQ
         {
-            "supplier_id": "SUP-BROKEN-01",
-            "name": "No-Contact Supplier",
+            "supplier_id": "SUP-BRK-001",
+            "name": "Ghost Technologies Ltd",
             "contact_email": None,
             "quality_score": 85,
             "reliability_score": 80,
@@ -103,9 +103,9 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
         },
         # Blacklisted but still on an open PO — conflict
         {
-            "supplier_id": "SUP-BROKEN-02",
-            "name": "Blacklisted On Open PO",
-            "contact_email": "badactor@example.com",
+            "supplier_id": "SUP-BRK-002",
+            "name": "Rogue Electronics",
+            "contact_email": "badactor@rogue-elec.com",
             "quality_score": 30,
             "reliability_score": 20,
             "certifications": "",
@@ -127,9 +127,9 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
     po_broken = [
         # Open PO referencing blacklisted supplier
         {
-            "po_id": "PO-BROKEN-01",
-            "component_id": "COMP-104",
-            "supplier_id": "SUP-BROKEN-02",  # blacklisted!
+            "po_id": "PO-BRK-001",
+            "component_id": "CMP-004",
+            "supplier_id": "SUP-BRK-002",  # blacklisted!
             "quantity": 200,
             "unit_price": 90.0,
             "total_value": 18000.0,
@@ -141,9 +141,9 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
         },
         # PO with zero quantity — invalid
         {
-            "po_id": "PO-BROKEN-02",
-            "component_id": "COMP-102",
-            "supplier_id": "SUP-18",
+            "po_id": "PO-BRK-002",
+            "component_id": "CMP-002",
+            "supplier_id": "SUP-002",
             "quantity": 0,
             "unit_price": 0.8,
             "total_value": 0.0,
@@ -155,9 +155,9 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
         },
         # PO with no delivery date — monitoring impossible
         {
-            "po_id": "PO-BROKEN-03",
-            "component_id": "COMP-103",
-            "supplier_id": "SUP-33",
+            "po_id": "PO-BRK-003",
+            "component_id": "CMP-003",
+            "supplier_id": "SUP-008",
             "quantity": 500,
             "unit_price": 12.0,
             "total_value": 6000.0,
@@ -169,10 +169,10 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
         },
         # Duplicate PO (same component/supplier/qty — possible duplicate entry)
         {
-            "po_id": "PO-BROKEN-04",
-            "component_id": "COMP-104",
-            "supplier_id": "SUP-21",
-            "quantity": 600,          # same as PO-7712
+            "po_id": "PO-BRK-004",
+            "component_id": "CMP-004",
+            "supplier_id": "SUP-001",
+            "quantity": 600,          # same as PO-001
             "unit_price": 140.0,
             "total_value": 84000.0,
             "status": "OPEN",
@@ -180,7 +180,7 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
             "current_expected_delivery": (NOW + timedelta(days=14)).isoformat(),
             "delay_days": 0,
             "anomaly": "POSSIBLE_DUPLICATE",
-            "notes": "Potential duplicate of PO-7712 — same supplier, component, quantity",
+            "notes": "Potential duplicate of PO-001 — same supplier, component, quantity",
         },
     ]
     if scenario in {"purchase_orders", "all"}:
@@ -197,9 +197,9 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
     prod_broken = [
         # References non-existent component
         {
-            "production_id": "PROD-BROKEN-01",
+            "production_id": "WO-BRK-001",
             "product": "Ghost Product",
-            "component_id": "COMP-GHOST",  # does not exist
+            "component_id": "CMP-GHOST",  # does not exist
             "quantity": 100,
             "component_per_unit": 2,
             "components_needed": 200,
@@ -210,9 +210,9 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
         },
         # Already past deadline but status still ON_TRACK
         {
-            "production_id": "PROD-BROKEN-02",
+            "production_id": "WO-BRK-002",
             "product": "Overdue Unit",
-            "component_id": "COMP-101",
+            "component_id": "CMP-001",
             "quantity": 50,
             "component_per_unit": 1,
             "components_needed": 50,
@@ -236,7 +236,7 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
     audit_broken = [
         # Audit log with no incident_id — orphaned
         {
-            "event_id": "AUD-BROKEN-001",
+            "event_id": "AUD-BRK-001",
             "timestamp": (NOW - timedelta(hours=6)).isoformat(),
             "source": "n8n",
             "workflow": "ERP_EVENT_SYNC",
@@ -264,10 +264,10 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
             "event_type": "DELIVERY_COMMITMENT_BREACH",
             "incident_id": "INC-001",
             "entity_type": "PURCHASE_ORDER",
-            "entity_id": "PO-7712",
-            "action": "TRIGGER_GROQ_AGENT",
+            "entity_id": "PO-001",
+            "action": "TRIGGER_AI_AGENT",
             "status": "SUCCESS",
-            "tool": "TRIGGER_GROQ_AGENT",
+            "tool": "TRIGGER_AI_AGENT",
             "result": "SUCCESS",
             "decision": "DELIVERY_COMMITMENT_BREACH",
             "reason": "Duplicate event — idempotency check missed",
@@ -295,7 +295,7 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
             "node": "POST /integrations/erp/event",
             "error_type": "HTTP_5XX",
             "error_message": "503 Service Unavailable — backend not responding",
-            "payload": {"po_id": "PO-7712", "status": "DELAYED"},
+            "payload": {"po_id": "PO-001", "status": "DELAYED"},
             "retry_count": 2,
             "max_retries": 4,
             "retryable": True,
@@ -309,7 +309,7 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
             "node": "Validate Supplier Response",
             "error_type": "VALIDATION_FAILURE",
             "error_message": "Missing required fields: rfq_id, quantity_available",
-            "payload": {"supplier_id": "SUP-88", "component_id": "COMP-201"},
+            "payload": {"supplier_id": "SUP-007", "component_id": "CMP-006"},
             "retry_count": 0,
             "max_retries": 0,
             "retryable": False,
@@ -320,7 +320,7 @@ def inject_broken_data(db: Database, scenario: str = "all") -> None:
         {
             "error_id": "ERR-003",
             "timestamp": (NOW - timedelta(minutes=15)).isoformat(),
-            "workflow": "GROQ_AI_AGENT",
+            "workflow": "AI_AGENT",
             "node": "Groq LLM — LLaMA-3.3-70B",
             "error_type": "LLM_TIMEOUT",
             "error_message": "Groq API timeout after 30s",

@@ -114,7 +114,21 @@ def client(mock_db):
     settings.API_KEY = ""
     settings.BACKEND_API_KEY = ""
     settings.GENERAL_RATE_LIMIT_MAX = 1000
-    c = TestClient(app)
+
+    # Create a test admin user and generate a JWT token for authentication
+    from app.core.auth_security import create_access_token
+
+    mock_db["users"].insert_one({
+        "user_id": "TEST-ADMIN-001",
+        "name": "Test Admin",
+        "email": "test@test.com",
+        "password_hash": "",
+        "role": "admin",
+        "is_active": True,
+    })
+
+    token = create_access_token(subject="TEST-ADMIN-001", role="admin")
+    c = TestClient(app, headers={"Authorization": f"Bearer {token}"})
     yield c
     app.dependency_overrides.pop(get_mongo_db, None)
 
