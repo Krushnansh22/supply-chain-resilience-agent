@@ -4,6 +4,9 @@ import { listInventory } from "../../api/inventory.js";
 export default function InventoryPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState("component_id");
+  const [sortAsc, setSortAsc] = useState(true);
 
   useEffect(() => {
     listInventory().then(setRows).catch(console.error).finally(() => setLoading(false));
@@ -11,6 +14,27 @@ export default function InventoryPage() {
 
   const criticalCount = rows.filter(r => r.days_of_supply != null && r.days_of_supply < 7).length;
   const warningCount = rows.filter(r => r.days_of_supply != null && r.days_of_supply >= 7 && r.days_of_supply < 14).length;
+
+  const handleSort = (field) => {
+    if (sortField === field) setSortAsc(!sortAsc);
+    else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+  };
+
+  const filtered = rows.filter((r) =>
+    r.component_id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const sorted = [...filtered].sort((a, b) => {
+    const valA = a[sortField] ?? "";
+    const valB = b[sortField] ?? "";
+    if (typeof valA === "number" && typeof valB === "number") {
+      return sortAsc ? valA - valB : valB - valA;
+    }
+    return sortAsc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+  });
 
   return (
     <div className="page-container">
@@ -53,8 +77,23 @@ export default function InventoryPage() {
       </div>
 
       <div className="dashboard-card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="card-header-row" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-subtle)" }}>
+        <div className="card-header-row" style={{ padding: "16px 20px", borderBottom: "1px solid var(--border-subtle)", flexWrap: "wrap", gap: 12 }}>
           <h3 className="card-header-title" style={{ margin: 0 }}>Inventory Balance & Burn Rate</h3>
+          <div style={{ marginLeft: "auto" }}>
+            <input
+              type="text"
+              placeholder="Filter by SKU..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "1px solid var(--border-subtle)",
+                fontSize: "12px",
+                width: "200px",
+              }}
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -67,15 +106,23 @@ export default function InventoryPage() {
             <table className="custom-data-table">
               <thead>
                 <tr>
-                  <th>Component SKU</th>
-                  <th>Usable / Total Stock</th>
-                  <th>Daily Usage</th>
-                  <th>Days of Supply</th>
+                  <th onClick={() => handleSort("component_id")} style={{ cursor: "pointer", userSelect: "none" }}>
+                    Component SKU {sortField === "component_id" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
+                  <th onClick={() => handleSort("usable_stock")} style={{ cursor: "pointer", userSelect: "none" }}>
+                    Usable / Total Stock {sortField === "usable_stock" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
+                  <th onClick={() => handleSort("daily_usage")} style={{ cursor: "pointer", userSelect: "none" }}>
+                    Daily Usage {sortField === "daily_usage" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
+                  <th onClick={() => handleSort("days_of_supply")} style={{ cursor: "pointer", userSelect: "none" }}>
+                    Days of Supply {sortField === "days_of_supply" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
                   <th>Stock Health</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
+                {sorted.map((r) => {
                   const isCritical = r.days_of_supply != null && r.days_of_supply < 7;
                   const isWarning = r.days_of_supply != null && r.days_of_supply >= 7 && r.days_of_supply < 14;
                   return (

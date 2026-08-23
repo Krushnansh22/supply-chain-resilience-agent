@@ -1,8 +1,10 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-export async function fetchReportPreview({ incidentId, startDate, endDate, includeDiagnostics = false } = {}) {
+export async function fetchReportPreview({ incidentId, startDate, endDate, includeDiagnostics = false, orderId, supplierId } = {}) {
   const params = new URLSearchParams();
   if (incidentId) params.set("incident_id", incidentId);
+  if (orderId) params.set("order_id", orderId);
+  if (supplierId) params.set("supplier_id", supplierId);
   if (startDate) params.set("start_date", new Date(`${startDate}T00:00:00Z`).toISOString());
   if (endDate) params.set("end_date", new Date(`${endDate}T23:59:59Z`).toISOString());
   if (includeDiagnostics) params.set("include_diagnostics", "true");
@@ -21,9 +23,11 @@ export async function fetchReportPreview({ incidentId, startDate, endDate, inclu
   return response.json();
 }
 
-export async function downloadOperatorReport({ incidentId, startDate, endDate, includeDiagnostics = false } = {}) {
+export async function downloadOperatorReport({ incidentId, startDate, endDate, includeDiagnostics = false, orderId, supplierId } = {}) {
   const params = new URLSearchParams();
   if (incidentId) params.set("incident_id", incidentId);
+  if (orderId) params.set("order_id", orderId);
+  if (supplierId) params.set("supplier_id", supplierId);
   if (startDate) params.set("start_date", new Date(`${startDate}T00:00:00Z`).toISOString());
   if (endDate) params.set("end_date", new Date(`${endDate}T23:59:59Z`).toISOString());
   if (includeDiagnostics) params.set("include_diagnostics", "true");

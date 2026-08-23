@@ -201,10 +201,6 @@ async def require_api_key(api_key: str = Security(_api_key_header)) -> None:
     - If settings.API_KEY is empty (default): open access — safe for local dev/demo.
     - If settings.API_KEY is set in .env: all mutating endpoints require matching X-API-Key.
     - Uses constant-time comparison (secrets.compare_digest) to prevent side-channel timing attacks.
-
-    Usage:
-        from app.middleware.security import require_api_key
-        @router.post("/inject", dependencies=[Depends(require_api_key)])
     """
     if not settings.API_KEY:
         return  # Open mode — API_KEY not configured
@@ -216,3 +212,28 @@ async def require_api_key(api_key: str = Security(_api_key_header)) -> None:
             detail="Invalid or missing API key. Provide a valid X-API-Key header.",
             headers={"WWW-Authenticate": "ApiKey"},
         )
+
+
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+
+_bearer_security = HTTPBearer(auto_error=False)
+
+
+async def require_api_key_or_user(
+    api_key: str = Security(_api_key_header),
+    auth: HTTPAuthorizationCredentials = Security(_bearer_security),
+) -> None:
+    if not settings.API_KEY:
+        return
+    if api_key and secrets.compare_digest(api_key, settings.API_KEY):
+        return
+    if auth and auth.credentials:
+        try:
+            payload = jwt.decode(auth.credentials, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            if payload.get("sub"):
+                return
+        except Exception:
+            pass
+    raise HTTPException(status_code=401, detail="Authentication required (API key or login token).")
+
