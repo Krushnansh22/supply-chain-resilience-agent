@@ -131,8 +131,8 @@ export default function LoginPage() {
         </p>
         
         <p className="auth-footer-text-sm" style={{ marginTop: "12px", fontSize: "11px", color: "var(--text-muted)" }}>
-          Demo: admin@scda.io (Admin) | supplier@alpha-components.in (Supplier) | user@scda.io (User)
-          <br/>Password: Admin@1234 / Supplier@1234 / User@1234
+          Demo: johndoe@gmail.com (Admin) | ravikapoor@gmail.com (Supplier) | priya123@gmail.com (User)
+          <br/>Password: john@123 / ravi@123 / priya@123
         </p>
       </div>
     </div>
