@@ -12,7 +12,7 @@ RECEIVES: a DB session (called once from database.init_db() at app startup)
 DELIVERS: rows in inventory / suppliers / purchase_orders / production_orders tables
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.models.inventory import Inventory
@@ -25,7 +25,7 @@ def run(db: Session) -> None:
     if db.query(Inventory).count() > 0:
         return  # already seeded
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # ─────────────────────────────────────────────
     # SUPPLIERS (10 total — 3 hero + 7 filler)

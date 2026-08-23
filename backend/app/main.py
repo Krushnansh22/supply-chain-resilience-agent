@@ -28,7 +28,7 @@ SECURITY LAYERS (all non-breaking):
 
 from contextlib import asynccontextmanager
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -70,7 +70,7 @@ async def lifespan(app: FastAPI):
     # them once so the audit and Agent Activity response contracts stay valid.
     db["audit_logs"].update_many(
         {"timestamp": {"$exists": False}},
-        {"$set": {"timestamp": datetime.utcnow()}},
+        {"$set": {"timestamp": datetime.now(timezone.utc)}},
     )
     yield
 

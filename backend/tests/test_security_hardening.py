@@ -28,9 +28,11 @@ from app.middleware.client_ip import get_trusted_client_ip
 from app.middleware.rate_limiter import (
     _store,
     _lock,
+    purge_empty_and_idle_keys,
+    record_and_check_rate_limit,
 )
 from app.core.auth_security import create_access_token
-from app.core.deps import get_mongo_db
+from app.core.deps import get_current_user
 
 import mongomock
 from app.mongo_database import get_mongo_db
@@ -45,6 +47,13 @@ def isolate_test():
     """Wipe rate-limit store and substitute mongomock DB before each test."""
     mock_db = mongomock.MongoClient()["test_scda"]
     app.dependency_overrides[get_mongo_db] = lambda: mock_db
+    app.dependency_overrides[get_current_user] = lambda: {
+        "user_id": "TEST-ADMIN-001",
+        "name": "Test Admin",
+        "email": "test@test.com",
+        "role": "admin",
+        "is_active": True,
+    }
 
     # Save settings that individual tests may mutate
     orig_proxy       = settings.TRUSTED_PROXY_IPS
@@ -62,6 +71,7 @@ def isolate_test():
         _store.clear()
 
     app.dependency_overrides.pop(get_mongo_db, None)
+    app.dependency_overrides.pop(get_current_user, None)
     settings.TRUSTED_PROXY_IPS        = orig_proxy
     settings.API_KEY                  = orig_api_key
     settings.BACKEND_API_KEY          = orig_backend_key

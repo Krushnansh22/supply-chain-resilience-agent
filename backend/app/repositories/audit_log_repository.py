@@ -1,5 +1,5 @@
 from pymongo.database import Database
-from datetime import datetime
+from datetime import datetime, timezone
 from app.repositories.base_repository import BaseRepository
 
 class AuditLogRepository(BaseRepository):
@@ -15,7 +15,7 @@ class AuditLogRepository(BaseRepository):
 
     @staticmethod
     def _clean(rows: list[dict]) -> list[dict]:
-        fallback = datetime.utcnow()
+        fallback = datetime.now(timezone.utc)
         seen = set()
         unique_rows = []
         for row in rows:
@@ -29,3 +29,4 @@ class AuditLogRepository(BaseRepository):
             seen.add(fingerprint)
             unique_rows.append(row)
         return unique_rows
+

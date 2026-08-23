@@ -90,28 +90,28 @@ export default function Sidebar() {
 
     if (user.role === "admin") {
       return [
-        { to: "/",          label: "Home",       end: true, icon: "overview"   },
-        { to: "/incidents", label: "Incidents",             icon: "incidents"  },
-        { to: "/approvals", label: "Approvals",             icon: "approvals"  },
-        { to: "/inventory", label: "Inventory",             icon: "inventory"  },
-        { to: "/production",label: "Production",            icon: "production" },
-        { to: "/suppliers", label: "Suppliers",             icon: "suppliers"  },
-        { to: "/reports",   label: "Reports",               icon: "reports"    },
-        { to: "/simulator", label: "Simulator",             icon: "simulator"  },
+        { to: "/",           label: "Home",       end: true, icon: "overview"   },
+        { to: "/incidents",  label: "Incidents",             icon: "incidents"  },
+        { to: "/approvals",  label: "Approvals",             icon: "approvals"  },
+        { to: "/inventory",  label: "Inventory",             icon: "inventory"  },
+        { to: "/production", label: "Production",            icon: "production" },
+        { to: "/suppliers",  label: "Suppliers",             icon: "suppliers"  },
+        { to: "/reports",    label: "Reports",               icon: "reports"    },
+        { to: "/simulator",  label: "Simulator",             icon: "simulator"  },
       ];
     }
 
     if (user.role === "supplier") {
       return [
-        { to: "/",          label: "Home",       end: true, icon: "overview"   },
-        { to: "/inventory", label: "Inventory",             icon: "inventory"  },
+        { to: "/supplier-dashboard", label: "Dashboard", end: true, icon: "overview"  },
+        { to: "/inventory",          label: "Inventory",             icon: "inventory" },
       ];
     }
 
     if (user.role === "user") {
       return [
-        { to: "/",          label: "Home",       end: true, icon: "overview"   },
-        { to: "/production",label: "Production",            icon: "production" },
+        { to: "/user-dashboard", label: "Dashboard", end: true, icon: "overview"   },
+        { to: "/production",     label: "Production",             icon: "production" },
       ];
     }
 

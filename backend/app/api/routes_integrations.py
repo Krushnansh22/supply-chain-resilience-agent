@@ -36,6 +36,7 @@ from pymongo.database import Database
 from app.mongo_database import get_mongo_db
 from app.config import settings
 from app.middleware.rate_limiter import check_rate_limit
+from app.core.deps import get_current_user_optional
 
 router = APIRouter()
 
@@ -115,8 +116,8 @@ class AuditEventPayload(BaseModel):
     entity_id: Optional[str] = Field(None, max_length=64)
     action: Optional[str] = Field(None, max_length=128)
     status: str = Field("SUCCESS", max_length=32)
-    input: Optional[dict] = {}
-    output: Optional[dict] = {}
+    input: Optional[dict] = Field(default_factory=dict)
+    output: Optional[dict] = Field(default_factory=dict)
     correlation_id: Optional[str] = Field(None, max_length=64)
     retry_count: int = 0
     error_details: Optional[str] = Field(None, max_length=1024)
@@ -134,7 +135,7 @@ class ERPLogPayload(BaseModel):
     entity_id: str = Field(..., max_length=64)
     incident_id: Optional[str] = Field(None, max_length=64)
     performed_by: str = Field("n8n", max_length=64)
-    details: Optional[dict] = {}
+    details: Optional[dict] = Field(default_factory=dict)
     status: str = Field("SUCCESS", max_length=32)
     correlation_id: Optional[str] = Field(None, max_length=64)
     error_details: Optional[str] = Field(None, max_length=1024)
@@ -212,16 +213,33 @@ def erp_event(
 @router.get("/purchase-orders/active")
 def get_active_purchase_orders(
     db: Database = Depends(get_mongo_db),
-    _auth=Depends(verify_api_key),
+    x_api_key: str = Header(default=""),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     """
-    n8n Delivery Monitor polls this every 5 minutes to check for breached commitments.
     Returns all active (non-terminal) purchase orders.
+    Accessible by n8n (via X-API-Key) or authenticated users (via Bearer token).
+    If caller is a supplier, filters to only their purchase orders.
     """
-    active_statuses = ["PENDING", "IN_TRANSIT", "DELAYED", "AT_RISK", "ORDERED"]
+    expected_key = settings.BACKEND_API_KEY or settings.API_KEY
+    is_api_key_valid = bool(expected_key and x_api_key and secrets.compare_digest(x_api_key, expected_key))
+    
+    if not is_api_key_valid and not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required (X-API-Key or Bearer token)")
+
+    active_statuses = ["PENDING", "IN_TRANSIT", "DELAYED", "AT_RISK", "ORDERED", "OPEN"]
+    query = {"status": {"$in": active_statuses}}
+    
+    if current_user and current_user.get("role") == "supplier":
+        supplier_id = current_user.get("supplier_id")
+        if supplier_id:
+            query["supplier_id"] = supplier_id
+        else:
+            return []
+
     pos = list(
         db["purchase_orders"].find(
-            {"status": {"$in": active_statuses}},
+            query,
             {"_id": 0}
         ).limit(200)
     )

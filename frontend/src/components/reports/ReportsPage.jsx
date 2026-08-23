@@ -200,7 +200,7 @@ export default function ReportsPage() {
             <div className="panel" style={{ padding: 14, background: "rgba(255, 255, 255, 0.02)" }}>
               <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Exposed PO Value</div>
               <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4, color: "var(--text-primary)" }}>
-                ${(previewData.summary_stats?.total_po_value_exposed || 0).toLocaleString()}
+                ₹{(previewData.summary_stats?.total_po_value_exposed || 0).toLocaleString()}
               </div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
                 {previewData.po_count} Purchase Order(s)
@@ -213,7 +213,7 @@ export default function ReportsPage() {
                 {previewData.summary_stats?.requires_human_approval ? "HUMAN APPROVAL" : "AUTONOMOUS"}
               </div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                Limit: ${(previewData.summary_stats?.approval_threshold_usd || 50000).toLocaleString()}
+                Limit: ₹{(previewData.summary_stats?.approval_threshold_usd || 50000).toLocaleString()}
               </div>
             </div>
           </div>

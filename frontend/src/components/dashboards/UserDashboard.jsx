@@ -18,24 +18,30 @@ export default function UserDashboard() {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState(null);
+
   const load = useCallback(() => {
     Promise.all([
-      listIncidents("all"),
-      listProductionOrders(),
-      listInventory()
+      listIncidents("all").catch(() => []),
+      listProductionOrders().catch(() => []),
+      listInventory().catch(() => [])
     ])
       .then(([inc, prod, inv]) => {
-        setIncidents(inc);
-        setProductionOrders(prod);
-        setInventory(inv);
+        setIncidents(Array.isArray(inc) ? inc : []);
+        setProductionOrders(Array.isArray(prod) ? prod : []);
+        setInventory(Array.isArray(inv) ? inv : []);
+        setError(null);
       })
-      .catch((err) => console.error("UserDashboard load failed:", err))
+      .catch((err) => {
+        console.error("UserDashboard load failed:", err);
+        setError("Failed to load dashboard data.");
+      })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 5000);
+    const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, [load]);
 
@@ -43,10 +49,14 @@ export default function UserDashboard() {
     return <div className="empty-state">Loading user dashboard...</div>;
   }
 
-  // Calculate metrics
-  const activeIncidents = incidents.filter(i => ["DETECTED", "INVESTIGATING", "SUPPLIER_CONTACT", "EVALUATING", "PLAN_READY", "WAITING_APPROVAL", "EXECUTING", "REPLANNING"].includes(i.status));
-  const blockedProduction = productionOrders.filter(p => p.status === "BLOCKED" || p.status === "WAITING_PARTS");
-  const lowStock = inventory.filter(i => i.usable_stock <= i.safety_stock);
+  if (error && incidents.length === 0 && productionOrders.length === 0) {
+    return <div className="empty-state" style={{ color: "var(--red-accent)" }}>{error}</div>;
+  }
+
+  // Calculate metrics safely with Array.isArray guards
+  const activeIncidents = (Array.isArray(incidents) ? incidents : []).filter(i => ["DETECTED", "INVESTIGATING", "SUPPLIER_CONTACT", "EVALUATING", "PLAN_READY", "WAITING_APPROVAL", "EXECUTING", "REPLANNING"].includes(i.status));
+  const blockedProduction = (Array.isArray(productionOrders) ? productionOrders : []).filter(p => p.status === "BLOCKED" || p.status === "WAITING_PARTS");
+  const lowStock = (Array.isArray(inventory) ? inventory : []).filter(i => i.usable_stock <= i.safety_stock);
 
   return (
     <div className="page-container">

@@ -34,12 +34,12 @@ export default function KpiCards({ incidents = [], productionOrders = [], suppli
           <span className="kpi-title-text">Current balance</span>
         </div>
 
-        <div className="kpi-amount-val">$999,999</div>
+        <div className="kpi-amount-val">₹999,999</div>
 
         <div className="kpi-footer-row">
           <span className="kpi-sub-text">Today profit</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ color: "var(--green-accent)", fontWeight: 700 }}>+$123,123</span>
+            <span style={{ color: "var(--green-accent)", fontWeight: 700 }}>+₹123,123</span>
             <span className="kpi-trend-pill positive">+10.05%</span>
           </div>
         </div>
@@ -58,12 +58,12 @@ export default function KpiCards({ incidents = [], productionOrders = [], suppli
           <span className="kpi-title-text">Income</span>
         </div>
 
-        <div className="kpi-amount-val">$223,324</div>
+        <div className="kpi-amount-val">₹223,324</div>
 
         <div className="kpi-footer-row">
           <span className="kpi-sub-text">Today</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ color: "var(--green-accent)", fontWeight: 700 }}>+$142,245</span>
+            <span style={{ color: "var(--green-accent)", fontWeight: 700 }}>+₹142,245</span>
             <span className="kpi-trend-pill positive">+23.23%</span>
           </div>
         </div>
@@ -81,12 +81,12 @@ export default function KpiCards({ incidents = [], productionOrders = [], suppli
           <span className="kpi-title-text">Expence</span>
         </div>
 
-        <div className="kpi-amount-val">$123,434</div>
+        <div className="kpi-amount-val">₹123,434</div>
 
         <div className="kpi-footer-row">
           <span className="kpi-sub-text">Today</span>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ color: "var(--red-accent)", fontWeight: 700 }}>-$123,123</span>
+            <span style={{ color: "var(--red-accent)", fontWeight: 700 }}>-₹123,123</span>
             <span className="kpi-trend-pill negative">-10.05%</span>
           </div>
         </div>

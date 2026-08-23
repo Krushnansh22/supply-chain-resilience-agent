@@ -18,9 +18,9 @@ SECURITY ADDITIONS (Dev2):
   - Input validators on TriggerRequest and ApprovalDecision
 """
 
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from pydantic import BaseModel, ConfigDict, field_validator, Field
-from datetime import datetime
+from datetime import datetime, timezone
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -28,6 +28,9 @@ from app.agent.agent_loop import run_agent_for_incident, get_agent_state
 from app.agent.states import AgentState
 from app.middleware.security import require_api_key
 from app.middleware.rate_limiter import check_rate_limit
+
+from app.config import settings
+from app.core.deps import get_current_user
 
 router = APIRouter()
 
@@ -77,6 +80,7 @@ def trigger_agent(
 def agent_state(
     incident_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(get_current_user),
 ):
     return {"incident_id": incident_id, "state": get_agent_state(incident_id, db)}
 
@@ -85,6 +89,7 @@ def agent_state(
 def agent_plan(
     incident_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(get_current_user),
 ):
     plan = db["recovery_plans"].find_one({"incident_id": incident_id}, {"_id": 0})
     if not plan:
@@ -94,7 +99,7 @@ def agent_plan(
             "recommended_option_id": "",
             "recommendation_reason": "No recovery plan has been generated.",
             "requires_human_approval": False,
-            "approval_threshold_usd": 50000,
+            "approval_threshold_usd": settings.AUTONOMOUS_APPROVAL_LIMIT_USD,
         }
     return plan
 
@@ -107,20 +112,21 @@ def approve_plan(
     _auth: None = Depends(require_api_key),
 ):
     """
+    Coordinator approves the recommended recovery plan.
     On approval, transition state WAITING_APPROVAL -> EXECUTING.
     Rate limited: 10 approvals per minute per IP.
     """
     check_rate_limit(request, bucket="agent_approve", max_calls=10, window_seconds=60)
     incident = db["incidents"].find_one({"incident_id": decision.incident_id}, {"_id": 0})
     if not incident:
-        return {"error": "incident not found"}
+        raise HTTPException(status_code=404, detail="incident not found")
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.EXECUTING.value}})
     db["agent_sessions"].update_one(
         {"incident_id": decision.incident_id},
-        {"$set": {"state": AgentState.EXECUTING.value, "updated_at": datetime.utcnow()}, "$inc": {"revision": 1}},
+        {"$set": {"state": AgentState.EXECUTING.value, "updated_at": datetime.now(timezone.utc)}, "$inc": {"revision": 1}},
         upsert=True,
     )
-    db["audit_logs"].insert_one({"timestamp": datetime.utcnow(), "incident_id": decision.incident_id, "action": "Recovery plan approved by coordinator.", "decision": "APPROVED"})
+    db["audit_logs"].insert_one({"timestamp": datetime.now(timezone.utc), "incident_id": decision.incident_id, "action": "Recovery plan approved by coordinator.", "decision": "APPROVED"})
     return {"incident_id": decision.incident_id, "state": AgentState.EXECUTING.value}
 
 
@@ -138,12 +144,12 @@ def reject_plan(
     check_rate_limit(request, bucket="agent_reject", max_calls=10, window_seconds=60)
     incident = db["incidents"].find_one({"incident_id": decision.incident_id}, {"_id": 0})
     if not incident:
-        return {"error": "incident not found"}
+        raise HTTPException(status_code=404, detail="incident not found")
     db["incidents"].update_one({"incident_id": decision.incident_id}, {"$set": {"status": AgentState.REPLANNING.value}})
     db["agent_sessions"].update_one(
         {"incident_id": decision.incident_id},
-        {"$set": {"state": AgentState.REPLANNING.value, "updated_at": datetime.utcnow()}, "$inc": {"revision": 1}},
+        {"$set": {"state": AgentState.REPLANNING.value, "updated_at": datetime.now(timezone.utc)}, "$inc": {"revision": 1}},
         upsert=True,
     )
-    db["audit_logs"].insert_one({"timestamp": datetime.utcnow(), "incident_id": decision.incident_id, "action": "Recovery plan rejected; replanning required.", "decision": "REJECTED"})
+    db["audit_logs"].insert_one({"timestamp": datetime.now(timezone.utc), "incident_id": decision.incident_id, "action": "Recovery plan rejected; replanning required.", "decision": "REJECTED"})
     return {"incident_id": decision.incident_id, "state": AgentState.REPLANNING.value}

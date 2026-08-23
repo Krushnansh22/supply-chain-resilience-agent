@@ -7,3 +7,4 @@ import { apiRequest } from "./client.js";
 
 export const listSuppliers = () => apiRequest("/suppliers/");
 export const getSupplier = (id) => apiRequest(`/suppliers/${id}`);
+export const getSupplierMessages = (id) => apiRequest(`/suppliers/${id}/messages`);

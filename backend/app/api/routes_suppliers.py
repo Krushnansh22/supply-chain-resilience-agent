@@ -21,9 +21,26 @@ def get_repo(db: Database = Depends(get_mongo_db)):
     return SupplierRepository(db)
 
 
+def _resolve_supplier_id(current_user: dict, db: Database) -> Optional[str]:
+    supplier_id = current_user.get("supplier_id")
+    if supplier_id:
+        return supplier_id
+    email = current_user.get("email")
+    if email:
+        supp = db["suppliers"].find_one({"contact_email": email.lower()})
+        if supp:
+            return supp.get("supplier_id")
+    user_id = current_user.get("user_id")
+    if user_id:
+        supp = db["suppliers"].find_one({"user_id": user_id})
+        if supp:
+            return supp.get("supplier_id")
+    return None
+
+
 @router.get("/", response_model=list[SupplierOut])
 def list_suppliers(
-    repo: SupplierRepository = Depends(get_repo),
+    db: Database = Depends(get_mongo_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -31,8 +48,11 @@ def list_suppliers(
     Admin and User roles can see all suppliers.
     Supplier role can only see themselves.
     """
+    repo = SupplierRepository(db)
     if current_user["role"] == "supplier":
-        supplier_id = current_user.get("supplier_id")
+        supplier_id = _resolve_supplier_id(current_user, db)
+        if not supplier_id:
+            return []
         single = repo.get_by_supplier_id(supplier_id)
         return [single] if single else []
         
@@ -42,15 +62,18 @@ def list_suppliers(
 @router.get("/{supplier_id}", response_model=SupplierOut)
 def get_supplier(
     supplier_id: str = Path(..., pattern=_SUPPLIER_ID_PATTERN, min_length=1, max_length=32),
-    repo: SupplierRepository = Depends(get_repo),
+    db: Database = Depends(get_mongo_db),
     current_user: dict = Depends(get_current_user),
 ):
     """
     GET /suppliers/{supplier_id}
     Enforces that suppliers can only request their own details.
     """
-    if current_user["role"] == "supplier" and supplier_id != current_user.get("supplier_id"):
-        raise HTTPException(status_code=403, detail="Not authorized to access this supplier")
+    repo = SupplierRepository(db)
+    if current_user["role"] == "supplier":
+        resolved_id = _resolve_supplier_id(current_user, db)
+        if supplier_id != resolved_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access this supplier")
 
     row = repo.get_by_supplier_id(supplier_id)
     if not row:
@@ -69,8 +92,10 @@ def get_supplier_messages(
     Returns all messages exchanged with this supplier.
     Enforces that suppliers can only request their own messages.
     """
-    if current_user["role"] == "supplier" and supplier_id != current_user.get("supplier_id"):
-        raise HTTPException(status_code=403, detail="Not authorized to access these messages")
+    if current_user["role"] == "supplier":
+        resolved_id = _resolve_supplier_id(current_user, db)
+        if supplier_id != resolved_id:
+            raise HTTPException(status_code=403, detail="Not authorized to access these messages")
 
     supplier = SupplierRepository(db).get_by_supplier_id(supplier_id)
     if not supplier:

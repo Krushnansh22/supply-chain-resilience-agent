@@ -23,7 +23,12 @@ export async function apiRequest(path, options = {}) {
     headers,
   });
 
-  if (res.status === 401) {
+  // Only trigger unauthorized event for protected API routes, not public auth or health endpoints
+  if (
+    res.status === 401 &&
+    !path.startsWith("/auth/") &&
+    !path.startsWith("/health")
+  ) {
     localStorage.removeItem("scda_auth_token");
     localStorage.removeItem("scda_auth_user");
     window.dispatchEvent(new CustomEvent("scda_unauthorized"));

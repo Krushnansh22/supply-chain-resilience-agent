@@ -7,7 +7,13 @@ export async function fetchReportPreview({ incidentId, startDate, endDate, inclu
   if (endDate) params.set("end_date", new Date(`${endDate}T23:59:59Z`).toISOString());
   if (includeDiagnostics) params.set("include_diagnostics", "true");
 
-  const response = await fetch(`${BASE_URL}/audit/report/preview?${params}`);
+  const token = localStorage.getItem("scda_auth_token");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(`${BASE_URL}/audit/report/preview?${params}`, { headers });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `Report preview failed: ${response.status}`);
@@ -22,7 +28,12 @@ export async function downloadOperatorReport({ incidentId, startDate, endDate, i
   if (endDate) params.set("end_date", new Date(`${endDate}T23:59:59Z`).toISOString());
   if (includeDiagnostics) params.set("include_diagnostics", "true");
 
-  const response = await fetch(`${BASE_URL}/audit/report/operator.pdf?${params}`);
+  const token = localStorage.getItem("scda_auth_token");
+  const headers = {
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+  };
+
+  const response = await fetch(`${BASE_URL}/audit/report/operator.pdf?${params}`, { headers });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `Report generation failed: ${response.status}`);

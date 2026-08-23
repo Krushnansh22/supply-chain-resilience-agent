@@ -2,18 +2,27 @@
  * src/components/audit/AuditTimeline.jsx
  * Owner: Developer 4 (Frontend)
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { listAuditLogs } from "../../api/audit.js";
 import ActivityFeed from "./ActivityFeed.jsx";
 
 export default function AuditTimeline() {
   const [logs, setLogs] = useState([]);
+  const [incidentFilter, setIncidentFilter] = useState("ALL");
+
   useEffect(() => {
     const load = () => listAuditLogs().then(setLogs).catch(console.error);
     load();
     const interval = setInterval(load, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  const incidentIds = useMemo(() => [...new Set(logs.map((l) => l.incident_id).filter(Boolean))], [logs]);
+  const filtered = useMemo(
+    () => (incidentFilter === "ALL" ? logs : logs.filter((l) => l.incident_id === incidentFilter)),
+    [logs, incidentFilter]
+  );
 
   return (
     <div>

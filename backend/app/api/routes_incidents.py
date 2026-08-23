@@ -10,8 +10,8 @@ DELIVERS:
   - is the thing agent/agent_loop.py polls or subscribes to, to know what to work on
 """
 
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from typing import List
 from pymongo.database import Database
 
@@ -19,6 +19,7 @@ from app.mongo_database import get_mongo_db
 from app.repositories.incident_repository import IncidentRepository
 from app.schemas.common import IncidentOut, AuditLogOut
 from app.core.deps import get_current_user
+from app.services.report_generator import fetch_report_context, generate_report_narrative, generate_report_bundle
 
 router = APIRouter()
 
@@ -47,7 +48,11 @@ def list_incidents(
     """List operational incidents by default; diagnostics remain queryable separately."""
     query = {}
     if current_user["role"] == "supplier":
-        query["supplier_id"] = current_user.get("supplier_id")
+        supplier_id = current_user.get("supplier_id")
+        if supplier_id:
+            query["supplier_id"] = supplier_id
+        else:
+            return []
     
     if category == "operational":
         query.update({"type": {"$ne": "DATA_INCONSISTENCY"}, "status": {"$in": ACTIVE_STATUSES}})
@@ -93,7 +98,7 @@ def get_incident_activity(
         raise HTTPException(status_code=403, detail="Not authorized to access this resource")
         
     logs = list(db["audit_logs"].find({"incident_id": incident_id}, {"_id": 0}).sort("timestamp", 1))
-    fallback = datetime.utcnow()
+    fallback = datetime.now(timezone.utc)
     seen = set()
     unique_logs = []
     for log in logs:
@@ -107,10 +112,6 @@ def get_incident_activity(
         seen.add(fingerprint)
         unique_logs.append(log)
     return unique_logs
-
-
-from fastapi import Response
-from app.services.report_generator import fetch_report_context, generate_report_narrative, generate_report_bundle
 
 
 @router.get("/{incident_id}/report")
@@ -160,7 +161,7 @@ def get_incident_report_pdf(
         raise HTTPException(status_code=403, detail="Not authorized to access this resource")
 
     bundle = generate_report_bundle(db=db, incident_id=incident_id)
-    filename = f"incident-report-{incident_id}-{datetime.utcnow().date().isoformat()}.pdf"
+    filename = f"incident-report-{incident_id}-{datetime.now(timezone.utc).date().isoformat()}.pdf"
     return Response(
         content=bundle["pdf_bytes"],
         media_type="application/pdf",
