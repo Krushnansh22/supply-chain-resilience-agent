@@ -2,77 +2,88 @@
  * src/App.jsx
  * Owner: Developer 4 (Frontend)
  *
- * Top-level composition root. Wraps routes in AuthProvider, enforces ProtectedRoute,
- * maps public routes (Landing, Login, Register, Forgot, Reset) and role dashboards.
+ * FIX: Flattened route structure using React Router v6 Outlet pattern.
+ * The previous nested <Routes> inside the app-shell JSX caused inner paths
+ * (/supplier-dashboard, /user-dashboard) to never match absolute URLs because
+ * the inner <Routes> component strips the parent route prefix from the path.
+ *
+ * All routes are now declared in a single top-level <Routes>.
+ * The app-shell (Sidebar + TopBar) is rendered via AppShellLayout using <Outlet />.
  */
 
 import React, { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import ProtectedRoute from "./components/auth/ProtectedRoute.jsx";
 
 // Auth Pages
-import LandingPage from "./components/auth/LandingPage.jsx";
-import LoginPage from "./components/auth/LoginPage.jsx";
-import RegisterPage from "./components/auth/RegisterPage.jsx";
+import LandingPage       from "./components/auth/LandingPage.jsx";
+import LoginPage         from "./components/auth/LoginPage.jsx";
+import RegisterPage      from "./components/auth/RegisterPage.jsx";
 import ForgotPasswordPage from "./components/auth/ForgotPasswordPage.jsx";
-import ResetPasswordPage from "./components/auth/ResetPasswordPage.jsx";
+import ResetPasswordPage  from "./components/auth/ResetPasswordPage.jsx";
 
-// Dashboards & Shell layout
+// Layout
 import Sidebar from "./components/layout/Sidebar.jsx";
-import TopBar from "./components/layout/TopBar.jsx";
-import OverviewDashboard from "./components/overview/OverviewDashboard.jsx";
-import UserDashboard from "./components/dashboards/UserDashboard.jsx";
-import SupplierDashboard from "./components/dashboards/SupplierDashboard.jsx";
+import TopBar  from "./components/layout/TopBar.jsx";
+
+// Dashboards
+import OverviewDashboard  from "./components/overview/OverviewDashboard.jsx";
+import UserDashboard      from "./components/dashboards/UserDashboard.jsx";
+import SupplierDashboard  from "./components/dashboards/SupplierDashboard.jsx";
 
 // Core App Pages
-import IncidentsListPage from "./components/incidents/IncidentsListPage.jsx";
-import IncidentCommandCenter from "./components/incidents/IncidentCommandCenter.jsx";
-import ApprovalsPage from "./components/approvals/ApprovalsPage.jsx";
-import InventoryPage from "./components/inventory/InventoryPage.jsx";
-import ProductionPage from "./components/production/ProductionPage.jsx";
-import SuppliersPage from "./components/suppliers/SuppliersPage.jsx";
-import AgentActivityPage from "./components/audit/AgentActivityPage.jsx";
+import IncidentsListPage      from "./components/incidents/IncidentsListPage.jsx";
+import IncidentCommandCenter  from "./components/incidents/IncidentCommandCenter.jsx";
+import ApprovalsPage          from "./components/approvals/ApprovalsPage.jsx";
+import InventoryPage          from "./components/inventory/InventoryPage.jsx";
+import ProductionPage         from "./components/production/ProductionPage.jsx";
+import SuppliersPage          from "./components/suppliers/SuppliersPage.jsx";
+import AgentActivityPage      from "./components/audit/AgentActivityPage.jsx";
 import DisruptionSimulatorPanel from "./components/simulator/DisruptionSimulatorPanel.jsx";
-import DiagnosticsPage from "./components/diagnostics/DiagnosticsPage.jsx";
-import ReportsPage from "./components/reports/ReportsPage.jsx";
+import DiagnosticsPage        from "./components/diagnostics/DiagnosticsPage.jsx";
+import ReportsPage            from "./components/reports/ReportsPage.jsx";
 
+/** Sidebar + TopBar layout wrapper — rendered via <Outlet /> for all protected pages */
+function AppShellLayout() {
+  return (
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-main">
+        <TopBar />
+        <div className="app-content">
+          <Outlet />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Redirects to the role-appropriate home page */
 function DashboardHome() {
   const { user } = useAuth();
-  if (user?.role === "admin") {
-    return <OverviewDashboard />;
-  } else if (user?.role === "supplier") {
-    return <Navigate to="/supplier-dashboard" replace />;
-  } else {
-    return <Navigate to="/user-dashboard" replace />;
-  }
+  if (user?.role === "admin")    return <OverviewDashboard />;
+  if (user?.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
+  return <Navigate to="/user-dashboard" replace />;
 }
 
 function AppRoutes() {
   const { handleUnauthorized, loading, user } = useAuth();
 
-  // Listen to 401 unauthorized events from the api client
   useEffect(() => {
-    const handleUnauth = () => {
-      handleUnauthorized();
-    };
-    window.addEventListener("scda_unauthorized", handleUnauth);
-    return () => window.removeEventListener("scda_unauthorized", handleUnauth);
+    const handle = () => handleUnauthorized();
+    window.addEventListener("scda_unauthorized", handle);
+    return () => window.removeEventListener("scda_unauthorized", handle);
   }, [handleUnauthorized]);
 
-  // Only show full-screen loader when the token is being validated server-side
-  // and there's no user yet. If user is hydrated from localStorage, render
-  // routes immediately so post-login navigation works without being blocked.
+  // Only block on the full-screen spinner when token is being validated and
+  // no user is hydrated from localStorage yet.
   if (loading && !user) {
     return (
       <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100vh",
-        background: "var(--bg-canvas)",
-        fontFamily: "var(--font-display)",
-        fontWeight: "600",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        minHeight: "100vh", background: "var(--bg-canvas)",
+        fontFamily: "var(--font-display)", fontWeight: "600",
         color: "var(--text-secondary)"
       }}>
         <h2>Restoring Control Tower session...</h2>
@@ -82,50 +93,65 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Public Auth Routes */}
-      <Route path="/landing" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
+      {/* ── Public Routes (no auth required) ── */}
+      <Route path="/landing"         element={<LandingPage />} />
+      <Route path="/login"           element={<LoginPage />} />
+      <Route path="/register"        element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/reset-password"  element={<ResetPasswordPage />} />
 
-      {/* Protected Application Area */}
-      <Route
-        path="/*"
-        element={
-          <ProtectedRoute>
-            <div className="app-shell">
-              <Sidebar />
-              <div className="app-main">
-                <TopBar />
-                <div className="app-content">
-                  <Routes>
-                    <Route path="/" element={<DashboardHome />} />
-                    
-                    {/* Admin/Internal only routes */}
-                    <Route path="/incidents" element={<ProtectedRoute allowedRoles={["admin"]}><IncidentsListPage /></ProtectedRoute>} />
-                    <Route path="/incidents/:incidentId" element={<ProtectedRoute allowedRoles={["admin"]}><IncidentCommandCenter /></ProtectedRoute>} />
-                    <Route path="/approvals" element={<ProtectedRoute allowedRoles={["admin"]}><ApprovalsPage /></ProtectedRoute>} />
-                    <Route path="/inventory" element={<ProtectedRoute allowedRoles={["admin", "supplier"]}><InventoryPage /></ProtectedRoute>} />
-                    <Route path="/production" element={<ProtectedRoute allowedRoles={["admin", "user"]}><ProductionPage /></ProtectedRoute>} />
-                    <Route path="/suppliers" element={<ProtectedRoute allowedRoles={["admin"]}><SuppliersPage /></ProtectedRoute>} />
-                    <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin"]}><ReportsPage /></ProtectedRoute>} />
-                    <Route path="/simulator" element={<ProtectedRoute allowedRoles={["admin"]}><DisruptionSimulatorPanel /></ProtectedRoute>} />
-                    <Route path="/diagnostics" element={<ProtectedRoute allowedRoles={["admin"]}><DiagnosticsPage /></ProtectedRoute>} />
-                    <Route path="/agent-activity" element={<ProtectedRoute allowedRoles={["admin"]}><AgentActivityPage /></ProtectedRoute>} />
-                    
-                    {/* Role Dashboards */}
-                    <Route path="/user-dashboard" element={<ProtectedRoute allowedRoles={["user"]}><UserDashboard /></ProtectedRoute>} />
-                    <Route path="/supplier-dashboard" element={<ProtectedRoute allowedRoles={["supplier"]}><SupplierDashboard /></ProtectedRoute>} />
+      {/* ── Protected App Shell ── */}
+      {/* AppShellLayout renders Sidebar + TopBar + <Outlet /> for all children */}
+      <Route element={<ProtectedRoute><AppShellLayout /></ProtectedRoute>}>
 
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Routes>
-                </div>
-              </div>
-            </div>
-          </ProtectedRoute>
-        }
-      />
+        {/* Home: role-based landing */}
+        <Route path="/"  element={<DashboardHome />} />
+
+        {/* Role-specific dashboards */}
+        <Route path="/supplier-dashboard"
+          element={<ProtectedRoute allowedRoles={["supplier"]}><SupplierDashboard /></ProtectedRoute>}
+        />
+        <Route path="/user-dashboard"
+          element={<ProtectedRoute allowedRoles={["user"]}><UserDashboard /></ProtectedRoute>}
+        />
+
+        {/* Admin-only pages */}
+        <Route path="/incidents"
+          element={<ProtectedRoute allowedRoles={["admin"]}><IncidentsListPage /></ProtectedRoute>}
+        />
+        <Route path="/incidents/:incidentId"
+          element={<ProtectedRoute allowedRoles={["admin"]}><IncidentCommandCenter /></ProtectedRoute>}
+        />
+        <Route path="/approvals"
+          element={<ProtectedRoute allowedRoles={["admin"]}><ApprovalsPage /></ProtectedRoute>}
+        />
+        <Route path="/suppliers"
+          element={<ProtectedRoute allowedRoles={["admin"]}><SuppliersPage /></ProtectedRoute>}
+        />
+        <Route path="/reports"
+          element={<ProtectedRoute allowedRoles={["admin"]}><ReportsPage /></ProtectedRoute>}
+        />
+        <Route path="/simulator"
+          element={<ProtectedRoute allowedRoles={["admin"]}><DisruptionSimulatorPanel /></ProtectedRoute>}
+        />
+        <Route path="/diagnostics"
+          element={<ProtectedRoute allowedRoles={["admin"]}><DiagnosticsPage /></ProtectedRoute>}
+        />
+        <Route path="/agent-activity"
+          element={<ProtectedRoute allowedRoles={["admin"]}><AgentActivityPage /></ProtectedRoute>}
+        />
+
+        {/* Shared pages */}
+        <Route path="/inventory"
+          element={<ProtectedRoute allowedRoles={["admin", "supplier"]}><InventoryPage /></ProtectedRoute>}
+        />
+        <Route path="/production"
+          element={<ProtectedRoute allowedRoles={["admin", "user"]}><ProductionPage /></ProtectedRoute>}
+        />
+
+        {/* Unknown path → home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
     </Routes>
   );
 }

@@ -26,20 +26,18 @@ export default function SupplierDashboard() {
     }
 
     try {
-      // 1. Fetch supplier metrics/profile
+      // 1. Fetch supplier profile / metrics
       const info = await getSupplier(user.supplier_id);
       setSupplierInfo(info);
 
-      // 2. Fetch all POs and filter by supplier_id
-      const allPOs = await apiRequest("/integrations/purchase-orders/active");
-      const myPOs = allPOs.filter(po => po.supplier_id === user.supplier_id);
+      // 2. Fetch active POs and filter to this supplier
+      const allPOs = await apiRequest("/integrations/purchase-orders/active").catch(() => []);
+      const myPOs = Array.isArray(allPOs)
+        ? allPOs.filter(po => po.supplier_id === user.supplier_id)
+        : [];
       setPurchaseOrders(myPOs);
 
-      // 3. Fetch RFQs / rfqs
-      const allRfqs = await apiRequest("/suppliers/"); // Fallback or direct fetch
-      // For RFQ responses, let's fetch from RFQ collection
-      const rfqs = await apiRequest("/agent/trigger").catch(() => ({})); // fallback
-      // Alternatively, let's query the specific backend route if needed, or fallback gracefully.
+      // 3. RFQ responses — fallback gracefully (no dedicated endpoint yet)
       setRfqResponses([]);
     } catch (err) {
       console.error("SupplierDashboard load error:", err);

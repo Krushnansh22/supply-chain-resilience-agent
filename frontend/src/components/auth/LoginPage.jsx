@@ -6,11 +6,11 @@
  */
 
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -19,6 +19,13 @@ export default function LoginPage() {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // If already authenticated, redirect to the right dashboard
+  if (isAuthenticated && user) {
+    if (user.role === "admin")    return <Navigate to="/" replace />;
+    if (user.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
+    return <Navigate to="/user-dashboard" replace />;
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
