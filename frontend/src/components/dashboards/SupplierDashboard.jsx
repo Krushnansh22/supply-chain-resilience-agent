@@ -101,15 +101,15 @@ export default function SupplierDashboard() {
       }}>
         <div>
           <h2 style={{ color: "#FFFFFF", fontSize: "22px", marginBottom: "8px" }}>
-            {supplierInfo?.name || user.company_name}
+            {supplierInfo?.name || user?.company_name || "Supplier Console"}
           </h2>
           <p style={{ color: "rgba(255,255,255,0.8)", fontSize: "14px", margin: 0 }}>
-            Vendor Console · Registered Email: {supplierInfo?.contact_email || user.email}
+            Vendor Console · Registered Email: {supplierInfo?.contact_email || user?.email || "supplier@scda.io"}
           </p>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
           <span className="status-pill success" style={{ background: "#FFFFFF", color: "#059669" }}>
-            ID: {user.supplier_id}
+            ID: {user?.supplier_id || "SUP-001"}
           </span>
           <span className="status-pill success" style={{ background: "#FFFFFF", color: "#059669" }}>
             Status: {supplierInfo?.status || "ACTIVE"}
