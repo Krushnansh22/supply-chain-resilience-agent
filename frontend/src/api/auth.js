@@ -4,7 +4,17 @@
  * Authentication API calls: login, register, logout, me, forgot/reset password.
  */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL && !import.meta.env.VITE_API_BASE_URL.includes("localhost")) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  if (typeof window !== "undefined" && window.location && window.location.hostname) {
+    return `http://${window.location.hostname}:8000`;
+  }
+  return "http://localhost:8000";
+};
+
+const BASE_URL = getBaseUrl();
 
 async function request(path, options = {}, token = null) {
   const headers = { "Content-Type": "application/json" };
