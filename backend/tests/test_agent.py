@@ -2,7 +2,7 @@
 tests/test_agent.py
 Owner: Developer 1 (Agent) / Developer 2 (Backend)
 
-Tests for app/agent/agent_loop.py state machine and context gathering.
+Tests for app/agent/agent_loop.py autonomous multi-step reasoning, state machine, and tool execution.
 """
 
 from datetime import datetime, timezone
@@ -18,8 +18,8 @@ def mock_db():
     return mongomock.MongoClient()["test_agent_db"]
 
 
-def test_supplier_delay_scenario_reaches_investigating(mock_db):
-    """Triggering the agent moves incident from DETECTED to INVESTIGATING and gathers context."""
+def test_supplier_delay_scenario_runs_full_agent_loop(mock_db):
+    """Triggering the agent runs dynamic task decomposition, multi-step investigation, and recovery planning."""
     mock_db["incidents"].insert_one({
         "incident_id": "INC-001",
         "type": "SUPPLIER_DELAY",
@@ -37,18 +37,18 @@ def test_supplier_delay_scenario_reaches_investigating(mock_db):
     result = run_agent_for_incident("INC-001", mock_db)
 
     assert result["incident_id"] == "INC-001"
-    assert result["state"] == AgentState.INVESTIGATING.value
+    assert result["state"] in (AgentState.WAITING_APPROVAL.value, AgentState.RESOLVED.value)
     assert result["context"]["component_id"] == "COMP-001"
-    assert result["context"]["inventory"]["usable_stock"] == 200
+    assert len(result["tasks"]) >= 5
+    assert result["audit_trail_count"] > 0
 
     # Verify incident state in DB
     updated = mock_db["incidents"].find_one({"incident_id": "INC-001"})
-    assert updated["status"] == AgentState.INVESTIGATING.value
+    assert updated["status"] == result["state"]
 
-    # Verify audit log was recorded
-    audit = mock_db["audit_logs"].find_one({"incident_id": "INC-001"})
-    assert audit is not None
-    assert audit["decision"] == "INVESTIGATING"
+    # Verify audit logs were recorded
+    audit_count = mock_db["audit_logs"].count_documents({"incident_id": "INC-001"})
+    assert audit_count >= 3
 
 
 def test_agent_trigger_nonexistent_incident(mock_db):
@@ -96,7 +96,8 @@ def test_execute_tool_success_and_error_handling(mock_db):
     assert res_unknown.success is False
     assert "unknown" in res_unknown.error.lower()
 
-    # 4. Graceful handling of un-orchestrated tools
-    res_plan = execute_tool("build_recovery_plan", {}, mock_db)
-    assert res_plan.success is False
-    assert "workflow" in res_plan.summary.lower()
+    # 4. Successful execution of compute_recovery_options / build_recovery_plan
+    mock_db["suppliers"].insert_one({"supplier_id": "SUP-001", "name": "Apex", "quality_score": 90, "reliability_score": 95})
+    res_plan = execute_tool("compute_recovery_options", {"component_id": "COMP-EXEC-1", "required_quantity": 100, "required_by_days": 5}, mock_db)
+    assert res_plan.success is True
+    assert "options" in res_plan.data

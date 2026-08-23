@@ -15,18 +15,22 @@ export default function InfoCards({ incident, plan }) {
   const [suppliers, setSuppliers] = useState([]);
 
   useEffect(() => {
-    if (incident.affected_component) {
+    if (incident?.affected_component) {
       getComponent(incident.affected_component).then(setInventory).catch(() => setInventory(null));
       listProductionOrders()
-        .then((rows) => setProductionOrders(rows.filter((r) => r.component_id === incident.affected_component)))
+        .then((rows) => setProductionOrders((rows || []).filter((r) => r.component_id === incident.affected_component)))
         .catch(() => setProductionOrders([]));
     }
-  }, [incident.affected_component]);
+  }, [incident?.affected_component]);
 
   useEffect(() => {
-    const recommended = plan?.options.find((o) => o.option_id === plan.recommended_option_id);
-    const supplierIds = recommended?.allocations.map((a) => a.supplier_id) || [];
-    if (supplierIds.length === 0) { setSuppliers([]); return; }
+    const options = plan?.options || [];
+    const recommended = options.find((o) => o.option_id === plan?.recommended_option_id);
+    const supplierIds = (recommended?.allocations || []).map((a) => a.supplier_id).filter(Boolean);
+    if (supplierIds.length === 0) {
+      setSuppliers([]);
+      return;
+    }
     Promise.all(supplierIds.map((id) => getSupplier(id).catch(() => null)))
       .then((rows) => setSuppliers(rows.filter(Boolean)));
   }, [plan]);
@@ -35,12 +39,12 @@ export default function InfoCards({ incident, plan }) {
     <div className="info-grid">
       <div className="panel info-card">
         <div className="kpi-label" style={{ fontSize: 11 }}>INVENTORY</div>
-        <div className="info-card-body">Component: {incident.affected_component || "—"}</div>
+        <div className="info-card-body">Component: {incident?.affected_component || "—"}</div>
         {inventory ? (
           <>
             <div className="info-card-body">Usable stock: <strong>{inventory.usable_stock}</strong> / {inventory.current_stock}</div>
             <div className="info-card-body">Daily usage: {inventory.daily_usage}</div>
-            <div className="info-card-body" style={{ color: inventory.days_of_supply < 7 ? "var(--status-critical)" : "var(--text-primary)" }}>
+            <div className="info-card-body" style={{ color: (inventory.days_of_supply ?? 999) < 7 ? "var(--status-critical)" : "var(--text-primary)" }}>
               Days of supply: <strong>{inventory.days_of_supply ?? "—"}</strong>
             </div>
           </>
@@ -67,7 +71,7 @@ export default function InfoCards({ incident, plan }) {
         <div className="kpi-label" style={{ fontSize: 11 }}>SUPPLIER</div>
         {suppliers.length === 0 ? (
           <div className="info-card-empty">
-            {plan ? "No supplier allocated in the recommended option." : "Supplier contact happens once the agent starts investigating."}
+            {plan?.options?.length ? "No supplier allocated in the recommended option." : "Supplier contact happens once the agent starts investigating."}
           </div>
         ) : (
           suppliers.map((s) => (

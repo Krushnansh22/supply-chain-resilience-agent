@@ -50,7 +50,7 @@ def build_recovery_plan(
 
     Implementation:
     1. Single-supplier options for each RFQ candidate that can cover full quantity.
-    2. Split-sourcing option when no single supplier is optimal (team doc Section 9).
+    2. Split-sourcing option when multiple suppliers can fulfill portions of the order.
     3. Each option validated against constraints; rejected options kept with reasons.
     4. Best constraint-passing option recommended by composite score.
     5. Approval threshold enforced: >$50,000 requires human coordinator approval.
@@ -113,7 +113,7 @@ def build_recovery_plan(
             )
         )
 
-    # 2. Split-sourcing option (team doc Section 9)
+    # 2. Split-sourcing option (first-class option type)
     if len(rfq_candidates) >= 2:
         split_option = _build_split_option(
             rfq_candidates, required_quantity, required_cert,
@@ -129,7 +129,6 @@ def build_recovery_plan(
         # Score each valid option
         scored_valid = []
         for opt in valid_options:
-            # Use first allocation's supplier for scoring (or average for split)
             if len(opt.allocations) == 1:
                 candidate = next(
                     (c for c in rfq_candidates
@@ -143,7 +142,7 @@ def build_recovery_plan(
                 else:
                     score = 0.0
             else:
-                # Split-sourcing: average of supplier scores
+                # Split-sourcing: weighted average of supplier scores
                 scores = []
                 for alloc in opt.allocations:
                     cand = next(
@@ -173,7 +172,7 @@ def build_recovery_plan(
             supplier_list = ", ".join(a.supplier_id for a in recommended.allocations)
             recommendation_reason = (
                 f"Split-sourcing across {supplier_list} — "
-                f"lowest cost satisfying all constraints."
+                f"lowest risk satisfying all delivery & budget constraints."
             )
         else:
             recommendation_reason = (
@@ -182,12 +181,12 @@ def build_recovery_plan(
             )
     else:
         recommendation_reason = (
-            "No option currently satisfies all constraints — replanning required."
+            "No option currently satisfies all constraints — replanning or escalation required."
         )
 
     # 5. Approval threshold check (PS REQUIRED: >$50,000)
     recommended_cost = recommended.total_cost if recommended else 0
-    requires_human_approval = recommended_cost > settings.AUTONOMOUS_APPROVAL_LIMIT_USD
+    requires_human_approval = (recommended_cost > settings.AUTONOMOUS_APPROVAL_LIMIT_USD) or (recommended is None)
 
     return RecoveryPlan(
         incident_id=incident_id,
@@ -208,15 +207,16 @@ def _build_split_option(
     option_id: str,
 ) -> Optional[RecoveryPlanOption]:
     """
-    Builds a split-sourcing option when no single supplier can optimally cover the need.
-    Tries multiple split ratios and picks the best valid combination.
+    Builds a split-sourcing option when multiple suppliers can fulfill portions of the order.
+    Tries multiple split ratios and picks the best combination.
     """
     sorted_candidates = sorted(
         candidates, key=lambda c: c.get("unit_price", float("inf"))
     )
 
-    best_option = None
-    best_total_cost = float("inf")
+    best_valid_option = None
+    best_valid_cost = float("inf")
+    fallback_option = None
 
     for i in range(min(len(sorted_candidates), 4)):
         for j in range(i + 1, min(len(sorted_candidates), 4)):
@@ -230,21 +230,20 @@ def _build_split_option(
                 if qty1 <= 0 or qty2 <= 0:
                     continue
 
-                # Check MOQ
-                moq1 = c1.get("moq", 0)
-                moq2 = c2.get("moq", 0)
-                if (moq1 > 0 and qty1 < moq1) or (moq2 > 0 and qty2 < moq2):
-                    continue
-
                 cost1 = c1["unit_price"] * qty1
                 cost2 = c2["unit_price"] * qty2
                 total_cost = cost1 + cost2
 
-                if total_cost > max_budget * 1.2:  # allow 20% over for split
-                    continue
-
                 # Check all constraints
                 rejection_reasons = []
+
+                # MOQ check
+                moq1 = c1.get("moq", 0)
+                moq2 = c2.get("moq", 0)
+                if moq1 > 0 and qty1 < moq1:
+                    rejection_reasons.append(f"Supplier {c1['supplier_id']} MOQ {moq1} not met (ordered {qty1})")
+                if moq2 > 0 and qty2 < moq2:
+                    rejection_reasons.append(f"Supplier {c2['supplier_id']} MOQ {moq2} not met (ordered {qty2})")
 
                 budget_check = cv.check_budget(total_cost, max_budget)
                 if not budget_check.passed:
@@ -269,29 +268,32 @@ def _build_split_option(
 
                 constraints_ok = len(rejection_reasons) == 0
 
-                # Only consider if valid and cheaper than current best
-                if constraints_ok and total_cost < best_total_cost:
-                    best_total_cost = total_cost
-                    best_option = RecoveryPlanOption(
-                        option_id=option_id,
-                        allocations=[
-                            SupplierAllocation(
-                                supplier_id=c1["supplier_id"],
-                                quantity=qty1,
-                                unit_price=c1["unit_price"],
-                                delivery_days=c1["delivery_days"],
-                            ),
-                            SupplierAllocation(
-                                supplier_id=c2["supplier_id"],
-                                quantity=qty2,
-                                unit_price=c2["unit_price"],
-                                delivery_days=c2["delivery_days"],
-                            ),
-                        ],
-                        total_cost=total_cost,
-                        max_delivery_days=max_delivery,
-                        constraints_satisfied=True,
-                        rejection_reason=None,
-                    )
+                opt = RecoveryPlanOption(
+                    option_id=option_id,
+                    allocations=[
+                        SupplierAllocation(
+                            supplier_id=c1["supplier_id"],
+                            quantity=qty1,
+                            unit_price=c1["unit_price"],
+                            delivery_days=c1["delivery_days"],
+                        ),
+                        SupplierAllocation(
+                            supplier_id=c2["supplier_id"],
+                            quantity=qty2,
+                            unit_price=c2["unit_price"],
+                            delivery_days=c2["delivery_days"],
+                        ),
+                    ],
+                    total_cost=total_cost,
+                    max_delivery_days=max_delivery,
+                    constraints_satisfied=constraints_ok,
+                    rejection_reason="; ".join(rejection_reasons) if rejection_reasons else None,
+                )
 
-    return best_option
+                if constraints_ok and total_cost < best_valid_cost:
+                    best_valid_cost = total_cost
+                    best_valid_option = opt
+                elif fallback_option is None:
+                    fallback_option = opt
+
+    return best_valid_option or fallback_option

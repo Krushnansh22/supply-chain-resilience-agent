@@ -665,39 +665,6 @@
       "waitBetweenTries": 2000
     },
     {
-      "id": "mon-if-active",
-      "name": "\u23f0 [MONITOR] IF Active POs Found",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        480,
-        480
-      ],
-      "notes": "EARLY EXIT: If the backend returns an empty array (no active POs),\nstop execution immediately. Prevents the evaluate/idempotency nodes\nfrom processing null/empty items and causing downstream errors.",
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "mon-c1",
-              "leftValue": "={{ $input.all().length }}",
-              "rightValue": 0,
-              "operator": {
-                "type": "number",
-                "operation": "gt"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      }
-    },
-    {
       "id": "mon-evaluate",
       "name": "\u23f0 [MONITOR] Evaluate Delivery Commitments",
       "type": "n8n-nodes-base.code",
@@ -1166,38 +1133,6 @@
       }
     },
     {
-      "id": "agent-fetch-config",
-      "name": "\ud83e\udd16 [MAIN AGENT] GET /api/v1/config/n8n \u2014 Fetch Backend Config",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        240,
-        1440
-      ],
-      "notes": "DYNAMIC CONFIG: Fetches all runtime configuration from the backend once\nper incident lifecycle. Eliminates hard-coded $env references from downstream nodes.\nReturns: { notify_from_email, approval_notify_email, ops_alert_email,\n           autonomous_approval_limit_usd, backend_url, llm_config }",
-      "parameters": {
-        "method": "GET",
-        "url": "={{ $env.BACKEND_URL }}/api/v1/config/n8n",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-Key",
-              "value": "={{ $env.BACKEND_API_KEY }}"
-            },
-            {
-              "name": "Accept",
-              "value": "application/json"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "retryOnFail": true,
-      "maxTries": 3,
-      "waitBetweenTries": 2000
-    },
-    {
       "id": "agent-webhook",
       "name": "\ud83e\udd16 [MAIN AGENT] Webhook \u2014 POST /webhook/agent/analyze-incident",
       "type": "n8n-nodes-base.webhook",
@@ -1347,75 +1282,6 @@
       "waitBetweenTries": 2000
     },
     {
-      "id": "agent-post-analysis-prompt",
-      "name": "\ud83e\udd16 [MAIN AGENT] Build Groq Post-Analysis Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1440,
-        1440
-      ],
-      "notes": "POST-ANALYSIS STAGE: Constructs a structured prompt from the primary Groq decision,\ninput context, and financial impact. Passed to the Post-Analysis LLM for deep\nrecovery action planning.\n\nOutputs strict JSON:\n{\n  action_summary, logistics_reroute, expedite_recommended,\n  estimated_recovery_hours, risk_mitigation_steps[]\n}",
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const dec = $json;\nconst ctx = $('[\ud83e\udd16 [MAIN AGENT] POST /agent/trigger \u2014 Fetch Incident Context]').item.json;\nconst cfg = $('[\ud83e\udd16 [MAIN AGENT] GET /api/v1/config/n8n \u2014 Fetch Backend Config]').item.json;\nconst incident = (ctx.incident || ctx.context && ctx.context.incident || {});\nconst inv = (ctx.context && ctx.context.inventory) || {};\nconst suppliers = (ctx.context && ctx.context.suppliers) || [];\n\nconst altSuppliers = suppliers\n  .filter(s => !s.blacklisted && s.status !== 'INACTIVE')\n  .map(s => s.supplier_id + ' (' + s.name + ', lead_time=' + s.lead_time_days + 'd, reliability=' + s.reliability_score + ')')\n  .join(', ') || 'None available';\n\nconst approvalLimit = cfg.autonomous_approval_limit_usd || $env.AUTONOMOUS_APPROVAL_LIMIT_USD || 50000;\n\nconst prompt = `You are the Supply Chain Recovery Planner for the incident management system.\n\nBased on the primary LLM analysis and full incident context below, generate a structured recovery action plan.\n\n===== PRIMARY ANALYSIS RESULT =====\n- Incident ID: ${dec.incident_id}\n- Decision: ${dec.decision}\n- Routing Target: ${dec.routing_target}\n- Incident Type: ${dec.incident_type}\n- Recommended Action: ${dec.recommended_action}\n- Reasoning: ${dec.reasoning}\n- Estimated Impact: ${dec.estimated_impact}\n- Estimated Cost (USD): ${dec.estimated_cost_usd ?? 'Unknown'}\n- Autonomous Approval Limit: $${approvalLimit}\n- Anomalies Detected: ${JSON.stringify(dec.anomalies_detected || [])}\n\n===== PRODUCT / INVENTORY CONTEXT =====\n- Component ID: ${incident.affected_component || 'Unknown'}\n- Current Stock: ${inv.current_stock ?? 'Unknown'}\n- Days of Supply Remaining: ${inv.days_of_supply ?? 'Unknown'}\n- Delay Days: ${incident.delay_days || 0}\n- Financial Loss Risk (USD): ${dec.estimated_cost_usd ?? 'Unknown'}\n\n===== ALTERNATIVE SUPPLIERS =====\n${altSuppliers}\n\n===== INSTRUCTIONS =====\nAnalyze the situation and output ONLY the following strict JSON (no markdown, no explanation):\n{\n  \"action_summary\": \"<1-2 sentence plain-English recovery action>\",\n  \"logistics_reroute\": <true if rerouting logistics is needed | false>,\n  \"expedite_recommended\": <true if expedited shipping should be used | false>,\n  \"estimated_recovery_hours\": <integer estimate of hours to recover supply>,\n  \"risk_mitigation_steps\": [\"<step 1>\", \"<step 2>\", \"<step 3>\"]\n}`;\n\nreturn [{ json: {\n  incident_id: dec.incident_id,\n  correlation_id: dec.correlation_id,\n  decision: dec.decision,\n  routing_target: dec.routing_target,\n  incident_type: dec.incident_type,\n  anomalies_detected: dec.anomalies_detected,\n  recommended_action: dec.recommended_action,\n  reasoning: dec.reasoning,\n  estimated_impact: dec.estimated_impact,\n  estimated_cost_usd: dec.estimated_cost_usd,\n  requires_approval: dec.requires_approval,\n  groq_raw: dec.groq_raw,\n  post_analysis_prompt: prompt,\n  cfg_notify_from_email: cfg.notify_from_email || $env.NOTIFY_FROM_EMAIL || '',\n  cfg_approval_notify_email: cfg.approval_notify_email || $env.APPROVAL_NOTIFY_EMAIL || '',\n  cfg_ops_alert_email: cfg.ops_alert_email || $env.OPS_ALERT_EMAIL || '',\n  cfg_approval_limit: cfg.autonomous_approval_limit_usd || approvalLimit,\n  cfg_llm_model: cfg.llm_config && cfg.llm_config.model || $env.GROQ_MODEL || 'llama-3.3-70b-versatile'\n}}];\n"
-      }
-    },
-    {
-      "id": "agent-post-analysis-llm",
-      "name": "\ud83e\udd16 [MAIN AGENT] Groq Post-Analysis LLM",
-      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
-      "typeVersion": 1,
-      "position": [
-        1680,
-        1600
-      ],
-      "notes": "POST-ANALYSIS LLM: Separate Groq invocation for recovery action planning.\nModel and temperature are fetched dynamically from $env (set via .env / docker-compose).\nThis node is downstream of the primary routing decision so it never blocks routing.",
-      "parameters": {
-        "model": "={{ $env.GROQ_MODEL || 'llama-3.3-70b-versatile' }}",
-        "options": {
-          "temperature": "={{ parseFloat($env.GROQ_TEMPERATURE || '0.1') }}",
-          "maxTokens": 800
-        }
-      },
-      "credentials": {
-        "groqApi": {
-          "id": "groq-credential-id",
-          "name": "Groq API"
-        }
-      }
-    },
-    {
-      "id": "agent-post-analysis-chain",
-      "name": "\ud83e\udd16 [MAIN AGENT] Groq Post-Analysis Chain",
-      "type": "@n8n/n8n-nodes-langchain.chainLlm",
-      "typeVersion": 1.4,
-      "position": [
-        1920,
-        1440
-      ],
-      "notes": "Invokes the Post-Analysis Groq LLM with the recovery planning prompt.\nOutputs raw text that is parsed by the next node into strict JSON.",
-      "parameters": {
-        "promptType": "define",
-        "text": "={{ $json.post_analysis_prompt }}"
-      }
-    },
-    {
-      "id": "agent-post-analysis-parse",
-      "name": "\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2160,
-        1440
-      ],
-      "notes": "Parses post-analysis Groq output into strict JSON action plan.\nFallback: safe defaults if parse fails (no exceptions propagate).\nPasses both the original decision fields AND the action plan forward.",
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const rawText = $json.text || $json.response || '';\nconst upstream = $('[\ud83e\udd16 [MAIN AGENT] Build Groq Post-Analysis Prompt]').item.json;\n\nlet actionPlan = {\n  action_summary: 'Manual recovery review recommended',\n  logistics_reroute: false,\n  expedite_recommended: false,\n  estimated_recovery_hours: 72,\n  risk_mitigation_steps: ['Escalate to ops team', 'Review supplier alternatives', 'Monitor stock levels']\n};\n\ntry {\n  // Try to extract JSON block from LLM response\n  const match = rawText.match(/\\{[\\s\\S]*?\\}/);\n  if (match) {\n    const candidate = JSON.parse(match[0]);\n    // Validate required fields exist\n    if (candidate.action_summary) actionPlan = { ...actionPlan, ...candidate };\n  }\n} catch(e) {\n  // Keep safe defaults on parse failure \u2014 never throw\n}\n\n// Ensure array type\nif (!Array.isArray(actionPlan.risk_mitigation_steps)) {\n  actionPlan.risk_mitigation_steps = [String(actionPlan.risk_mitigation_steps || 'Review manually')];\n}\n\nreturn [{ json: {\n  // Pass through all decision fields from primary LLM stage\n  incident_id: upstream.incident_id,\n  correlation_id: upstream.correlation_id,\n  decision: upstream.decision,\n  routing_target: upstream.routing_target,\n  incident_type: upstream.incident_type,\n  anomalies_detected: upstream.anomalies_detected,\n  recommended_action: upstream.recommended_action,\n  reasoning: upstream.reasoning,\n  estimated_impact: upstream.estimated_impact,\n  estimated_cost_usd: upstream.estimated_cost_usd,\n  requires_approval: upstream.requires_approval,\n  groq_raw: upstream.groq_raw,\n  // Dynamic config values (surfaced for downstream email/approval nodes)\n  cfg_notify_from_email: upstream.cfg_notify_from_email,\n  cfg_approval_notify_email: upstream.cfg_approval_notify_email,\n  cfg_ops_alert_email: upstream.cfg_ops_alert_email,\n  cfg_approval_limit: upstream.cfg_approval_limit,\n  cfg_llm_model: upstream.cfg_llm_model,\n  // Post-analysis action plan\n  action_plan: {\n    action_summary: actionPlan.action_summary,\n    logistics_reroute: Boolean(actionPlan.logistics_reroute),\n    expedite_recommended: Boolean(actionPlan.expedite_recommended),\n    estimated_recovery_hours: Number(actionPlan.estimated_recovery_hours) || 72,\n    risk_mitigation_steps: actionPlan.risk_mitigation_steps\n  },\n  post_analysis_raw: rawText\n}}];\n"
-      }
-    },
-    {
       "id": "agent-respond",
       "name": "\ud83e\udd16 [MAIN AGENT] Respond 200 \u2014 Analysis Complete",
       "type": "n8n-nodes-base.respondToWebhook",
@@ -1424,10 +1290,10 @@
         3400,
         1440
       ],
-      "notes": "Returns complete analysis result to caller \u2014 now includes action_plan from post-analysis stage.",
+      "notes": "Returns complete analysis result to caller.",
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { success: true, status: 'COMPLETED', incident_id: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.incident_id, correlation_id: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.correlation_id, decision: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.decision, routing_target: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.routing_target, anomalies_detected: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.anomalies_detected, recommended_action: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.recommended_action, reasoning: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.reasoning, action_plan: $('[\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output]').item.json.action_plan } }}",
+        "responseBody": "={{ { success: true, status: 'COMPLETED', incident_id: $('[\ud83e\udd16 [MAIN AGENT] Parse Groq Decision + Route]').item.json.incident_id, correlation_id: $('[\ud83e\udd16 [MAIN AGENT] Parse Groq Decision + Route]').item.json.correlation_id, decision: $('[\ud83e\udd16 [MAIN AGENT] Parse Groq Decision + Route]').item.json.decision, routing_target: $('[\ud83e\udd16 [MAIN AGENT] Parse Groq Decision + Route]').item.json.routing_target, anomalies_detected: $('[\ud83e\udd16 [MAIN AGENT] Parse Groq Decision + Route]').item.json.anomalies_detected, recommended_action: $('[\ud83e\udd16 [MAIN AGENT] Parse Groq Decision + Route]').item.json.recommended_action, reasoning: $('[\ud83e\udd16 [MAIN AGENT] Parse Groq Decision + Route]').item.json.reasoning } }}",
         "options": {
           "responseCode": 200
         }
@@ -2526,23 +2392,11 @@
       "main": [
         [
           {
-            "node": "\u23f0 [MONITOR] IF Active POs Found",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "\u23f0 [MONITOR] IF Active POs Found": {
-      "main": [
-        [
-          {
             "node": "\u23f0 [MONITOR] Evaluate Delivery Commitments",
             "type": "main",
             "index": 0
           }
-        ],
-        []
+        ]
       ]
     },
     "\u23f0 [MONITOR] Evaluate Delivery Commitments": {
@@ -2737,49 +2591,6 @@
             "index": 0
           }
         ]
-      ]
-    },
-    "\ud83e\udd16 [MAIN AGENT] GET /api/v1/config/n8n \u2014 Fetch Backend Config": {
-      "main": [
-        []
-      ]
-    },
-    "\ud83e\udd16 [MAIN AGENT] Build Groq Post-Analysis Prompt": {
-      "main": [
-        [
-          {
-            "node": "\ud83e\udd16 [MAIN AGENT] Groq Post-Analysis Chain",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "\ud83e\udd16 [MAIN AGENT] Groq Post-Analysis LLM": {
-      "ai_languageModel": [
-        [
-          {
-            "node": "\ud83e\udd16 [MAIN AGENT] Groq Post-Analysis Chain",
-            "type": "ai_languageModel",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "\ud83e\udd16 [MAIN AGENT] Groq Post-Analysis Chain": {
-      "main": [
-        [
-          {
-            "node": "\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "\ud83e\udd16 [MAIN AGENT] Parse Post-Analysis Output": {
-      "main": [
-        []
       ]
     },
     "\ud83e\udd16 [MAIN AGENT] POST /webhook/approval-required": {

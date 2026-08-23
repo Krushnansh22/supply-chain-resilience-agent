@@ -17,6 +17,7 @@ import StatusBadge from "../common/StatusBadge.jsx";
 import InfoCards from "./InfoCards.jsx";
 import RecoveryPlanPanel from "./RecoveryPlanPanel.jsx";
 import ApprovalModal from "./ApprovalModal.jsx";
+import AgentThoughtStream from "./AgentThoughtStream.jsx";
 import { downloadOperatorReport } from "../../api/reports.js";
 
 const FLOW_STEPS = [
@@ -135,9 +136,19 @@ export default function IncidentCommandCenter() {
             <button className="btn-ghost" disabled={reporting} onClick={handleReport}>
               {reporting ? "Preparing…" : "↓ Download PDF"}
             </button>
-            <button className="btn-primary" disabled={triggering} onClick={handleTrigger}>
-              {triggering ? "Triggering…" : "▶ Trigger Agent"}
-            </button>
+            {agentState === "WAITING_APPROVAL" ? (
+              <a href="/approvals" className="btn btn-primary" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                ⚠️ Review Escalation
+              </a>
+            ) : agentState === "RESOLVED" ? (
+              <button className="btn-ghost" disabled={triggering} onClick={handleTrigger} title="Re-evaluate with fresh context">
+                {triggering ? "Re-evaluating…" : "🔄 Re-run Analysis"}
+              </button>
+            ) : (
+              <button className="btn-primary" disabled={triggering} onClick={handleTrigger}>
+                {triggering ? "Agent Reasoning…" : "⚡ Run Agent Loop"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -214,20 +225,12 @@ export default function IncidentCommandCenter() {
 
       <InfoCards incident={incident} plan={plan} />
 
-      <div className="panel elevated-panel" style={{ marginTop: 16 }}>
-        <h3>Agent Activity</h3>
-        {auditLogs.length === 0 ? (
-          <p className="empty-state">No activity yet — trigger the agent to begin investigating.</p>
-        ) : (
-          auditLogs.map((log, i) => (
-            <div key={i} className="audit-line">
-              <span className="audit-time">{new Date(log.timestamp).toLocaleTimeString()}</span>{" "}
-              ✓ {log.action}
-              {log.decision && <span className="audit-decision"> — {log.decision}: {log.reason}</span>}
-            </div>
-          ))
-        )}
-      </div>
+      {/* Autonomous Multi-Step Reasoning & Thought Stream Visualizer */}
+      <AgentThoughtStream
+        auditLogs={auditLogs}
+        isRunning={triggering || agentState === "INVESTIGATING" || agentState === "REPLANNING"}
+        incidentStatus={agentState || incident.status}
+      />
 
       {plan && <RecoveryPlanPanel plan={plan} incident={incident} />}
 

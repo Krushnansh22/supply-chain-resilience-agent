@@ -5,7 +5,7 @@
  * DELIVERS: POST /simulator/inject -> new Incident
  */
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { injectScenario } from "../../api/simulator.js";
 import { triggerAgent } from "../../api/agent.js";
 
@@ -18,6 +18,7 @@ const SCENARIOS = [
 ];
 
 export default function DisruptionSimulatorPanel() {
+  const navigate = useNavigate();
   const [error, setError] = useState(null);
   const [injecting, setInjecting] = useState(null);
   const [lastIncident, setLastIncident] = useState(null);

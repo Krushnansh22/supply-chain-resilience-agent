@@ -15,24 +15,36 @@ export default function ApprovalsPage() {
     setLoading(true);
     listIncidents("operational")
       .then(async (incidents) => {
-        const waiting = incidents.filter((i) => i.status === "WAITING_APPROVAL");
-        const withPlans = await Promise.all(
+        // Filter only WAITING_APPROVAL or DATA_INCONSISTENCY incidents
+        const waiting = (incidents || []).filter(
+          (i) => i.status === "WAITING_APPROVAL" || i.status === "DATA_INCONSISTENCY"
+        );
+
+        // Fetch plans in parallel and deduplicate by incident_id to eliminate redundancy
+        const map = new Map();
+        await Promise.all(
           waiting.map(async (incident) => {
+            if (map.has(incident.incident_id)) return;
             try {
               const plan = await getAgentPlan(incident.incident_id);
-              return { incident, plan };
+              map.set(incident.incident_id, { incident, plan });
             } catch {
-              return null;
+              map.set(incident.incident_id, {
+                incident,
+                plan: { incident_id: incident.incident_id, options: [], requires_human_approval: true },
+              });
             }
           })
         );
-        setPending(withPlans.filter(Boolean));
+        setPending(Array.from(map.values()));
       })
       .catch((err) => console.error("Approvals load failed:", err))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   if (loading) {
     return (
@@ -47,19 +59,28 @@ export default function ApprovalsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1>Approvals</h1>
-          <div className="page-subtitle">Decisions above the autonomous-execution threshold, waiting on a human coordinator.</div>
+          <h1>Approvals & Data Calibration</h1>
+          <div className="page-subtitle">
+            Escalations requiring human authorization or physical count baseline calibration.
+          </div>
         </div>
       </div>
 
       {pending.length === 0 ? (
         <div className="panel elevated-panel">
-          <p className="empty-state">No approvals pending. Recovery plans within the autonomous threshold execute automatically.</p>
+          <p className="empty-state">
+            No approvals pending. Recovery plans within the autonomous threshold execute automatically.
+          </p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {pending.map(({ incident, plan }) => (
-            <ApprovalCard key={incident.incident_id} plan={plan} incident={incident} onDecided={load} />
+            <ApprovalCard
+              key={incident.incident_id}
+              plan={plan}
+              incident={incident}
+              onDecided={load}
+            />
           ))}
         </div>
       )}
