@@ -4,18 +4,30 @@
  *
  * Single fetch wrapper every other file in src/api/ uses. Keeps base URL,
  * error handling, and JSON parsing in one place.
- *
- * RECEIVES: VITE_API_BASE_URL from frontend/.env
- * DELIVERS: parsed JSON (or throws) to the individual api/*.js modules
+ * Automatically injects the JWT token from localStorage and fires an
+ * event if a 401 is encountered.
  */
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export async function apiRequest(path, options = {}) {
+  const token = localStorage.getItem("scda_auth_token");
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers,
   });
+
+  if (res.status === 401) {
+    localStorage.removeItem("scda_auth_token");
+    localStorage.removeItem("scda_auth_user");
+    window.dispatchEvent(new CustomEvent("scda_unauthorized"));
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");

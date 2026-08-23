@@ -19,6 +19,7 @@ from app.schemas.common import AuditLogOut
 from app.middleware.rate_limiter import check_rate_limit
 from app.middleware.security import require_api_key
 from seed_data.broken_data import BROKEN_SCENARIOS, inject_broken_data
+from app.core.deps import require_admin
 
 router = APIRouter()
 
@@ -38,6 +39,7 @@ def get_repo(db: Database = Depends(get_mongo_db)):
 def list_audit_logs(
     incident_id: Optional[str] = Query(None, pattern=_ID_PATTERN, max_length=32),
     repo: AuditLogRepository = Depends(get_repo),
+    current_user: dict = Depends(require_admin),
 ):
     """GET /audit?incident_id=INC-001 -> full or incident-scoped audit timeline."""
     if incident_id:
@@ -46,7 +48,10 @@ def list_audit_logs(
 
 
 @router.get("/diagnostics")
-def list_diagnostics(db: Database = Depends(get_mongo_db)):
+def list_diagnostics(
+    db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(require_admin),
+):
     """Engineering-facing integration and data-quality records."""
     audit_logs = list(db["audit_logs"].find(
         {"$or": [
@@ -64,7 +69,7 @@ def inject_diagnostics(
     payload: BrokenDataRequest,
     request: Request,
     db: Database = Depends(get_mongo_db),
-    _auth: None = Depends(require_api_key),
+    current_user: dict = Depends(require_admin),
 ):
     """Explicitly inject test fixtures; never called during normal startup."""
     check_rate_limit(request, bucket="diagnostics_inject", max_calls=10, window_seconds=60)
@@ -104,6 +109,7 @@ def operator_report_preview(
     end_date: Optional[str] = Query(None, max_length=40),
     include_diagnostics: bool = Query(False),
     db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(require_admin),
 ):
     """
     Returns the LLM synthesized narrative and aggregated operational context as JSON
@@ -148,6 +154,7 @@ def operator_report_pdf(
     end_date: Optional[str] = Query(None, max_length=40),
     include_diagnostics: bool = Query(False),
     db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(require_admin),
 ):
     """Generate a comprehensive, LLM-synthesized operations report PDF."""
     check_rate_limit(request, bucket="operator_pdf_report", max_calls=20, window_seconds=60)

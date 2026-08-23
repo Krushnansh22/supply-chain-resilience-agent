@@ -2,19 +2,15 @@
  * src/components/layout/TopBar.jsx
  * Owner: Developer 4 (Frontend)
  *
- * Exact match to the reference dashboard screenshot:
- *  - Left: "Hello, Ducky" + Date picker pill [ 📅 26 / 12 / 2023 ]
- *  - Right:
- *      - Notification Bell 🔔 (with red badge)
- *      - Messages 💬
- *      - Apps Grid ⠶
- *      - User Profile [ Avatar + "Ducky Lee" + "Admin #1234" ] + live status
+ * Dynamic TopBar showing real user details, status, and system date.
  */
 
 import { useEffect, useState } from "react";
 import { apiRequest } from "../../api/client.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function TopBar() {
+  const { user } = useAuth();
   const [online, setOnline] = useState(null);
 
   useEffect(() => {
@@ -33,11 +29,16 @@ export default function TopBar() {
     year: "numeric",
   }).format(new Date()).replace(/\//g, " / ");
 
+  const firstName = user?.name ? user.name.split(" ")[0] : "User";
+  const userInitials = user?.name ? user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "US";
+  const displayRole = user?.role ? user.role.toUpperCase() : "USER";
+  const displayId = user?.user_id ? user.user_id.split("-").pop() : "0000";
+
   return (
     <header className="top-header">
       {/* Left side: Greeting + Date Pill */}
       <div className="header-left">
-        <h1 className="greeting-text">Hello, Ducky</h1>
+        <h1 className="greeting-text">Hello, {firstName}</h1>
         <div className="date-pill">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -45,7 +46,7 @@ export default function TopBar() {
             <line x1="8" y1="2" x2="8" y2="6"/>
             <line x1="3" y1="10" x2="21" y2="10"/>
           </svg>
-          <span>{todayStr || "26 / 12 / 2023"}</span>
+          <span>{todayStr}</span>
         </div>
       </div>
 
@@ -90,7 +91,9 @@ export default function TopBar() {
               width: 36,
               height: 36,
               borderRadius: "50%",
-              background: "linear-gradient(135deg, #FFB703 0%, #FB8500 100%)",
+              background: user?.role === "admin" ? "linear-gradient(135deg, #FFB703 0%, #FB8500 100%)" :
+                          user?.role === "supplier" ? "linear-gradient(135deg, #10B981 0%, #059669 100%)" :
+                          "linear-gradient(135deg, #2563EB 0%, #00C6FF 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -101,18 +104,12 @@ export default function TopBar() {
               overflow: "hidden"
             }}
           >
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-              alt="Ducky Lee"
-              className="user-avatar-img"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-            DL
+            {userInitials}
           </div>
           <div className="user-info">
-            <span className="user-name">Ducky Lee</span>
+            <span className="user-name">{user?.name || "Loading..."}</span>
             <span className="user-role">
-              Admin #1234 · {online === null ? "..." : online ? "Live" : "Offline"}
+              {displayRole} #{displayId} · {online === null ? "..." : online ? "Live" : "Offline"}
             </span>
           </div>
         </div>

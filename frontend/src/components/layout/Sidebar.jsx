@@ -2,19 +2,16 @@
  * src/components/layout/Sidebar.jsx
  * Owner: Developer 4 (Frontend)
  *
- * Exact match to the reference dashboard screenshot:
- *  - Colorful square logo at the top with segmented colors (red, yellow, green, cyan)
- *  - Vertical icon navigation with active cyan glow pill on right edge
- *  - Added extra comfortable width (104px) as requested
- *  - Full route support for all backend capabilities (including audit & reports)
+ * Dynamic Sidebar rendering based on authenticated User role.
+ * Includes a Logout button at the bottom.
  */
 
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 function NavIcon({ name }) {
   switch (name) {
     case "overview":
-      // Home icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -22,7 +19,6 @@ function NavIcon({ name }) {
         </svg>
       );
     case "incidents":
-      // Pie / Donut chart icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21.21 15.89A10 10 0 1 1 8 2.83"/>
@@ -30,7 +26,6 @@ function NavIcon({ name }) {
         </svg>
       );
     case "approvals":
-      // 4 Squares Grid icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="7" height="7" rx="1.5"/>
@@ -40,7 +35,6 @@ function NavIcon({ name }) {
         </svg>
       );
     case "inventory":
-      // Connected nodes / branching icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="18" cy="5" r="3"/>
@@ -51,7 +45,6 @@ function NavIcon({ name }) {
         </svg>
       );
     case "production":
-      // Delivery truck icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="1" y="3" width="15" height="13" rx="1"/>
@@ -61,7 +54,6 @@ function NavIcon({ name }) {
         </svg>
       );
     case "suppliers":
-      // Inbox / Tray download icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
@@ -69,7 +61,6 @@ function NavIcon({ name }) {
         </svg>
       );
     case "reports":
-      // Document / Report icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -80,7 +71,6 @@ function NavIcon({ name }) {
         </svg>
       );
     case "simulator":
-      // Lightning bolt icon
       return (
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
@@ -91,41 +81,63 @@ function NavIcon({ name }) {
   }
 }
 
-const NAV_ITEMS = [
-  { to: "/",          label: "Home",       end: true, icon: "overview"   },
-  { to: "/incidents", label: "Incidents",             icon: "incidents"  },
-  { to: "/approvals", label: "Approvals",             icon: "approvals"  },
-  { to: "/inventory", label: "Inventory",             icon: "inventory"  },
-  { to: "/production",label: "Production",            icon: "production" },
-  { to: "/suppliers", label: "Suppliers",             icon: "suppliers"  },
-  { to: "/reports",   label: "Reports",               icon: "reports"    },
-  { to: "/simulator", label: "Simulator",             icon: "simulator"  },
-];
-
 export default function Sidebar() {
+  const { user, logout } = useAuth();
+
+  // Define navigation items dynamically based on the role
+  const getNavItems = () => {
+    if (!user) return [];
+
+    if (user.role === "admin") {
+      return [
+        { to: "/",          label: "Home",       end: true, icon: "overview"   },
+        { to: "/incidents", label: "Incidents",             icon: "incidents"  },
+        { to: "/approvals", label: "Approvals",             icon: "approvals"  },
+        { to: "/inventory", label: "Inventory",             icon: "inventory"  },
+        { to: "/production",label: "Production",            icon: "production" },
+        { to: "/suppliers", label: "Suppliers",             icon: "suppliers"  },
+        { to: "/reports",   label: "Reports",               icon: "reports"    },
+        { to: "/simulator", label: "Simulator",             icon: "simulator"  },
+      ];
+    }
+
+    if (user.role === "supplier") {
+      return [
+        { to: "/",          label: "Home",       end: true, icon: "overview"   },
+        { to: "/inventory", label: "Inventory",             icon: "inventory"  },
+      ];
+    }
+
+    if (user.role === "user") {
+      return [
+        { to: "/",          label: "Home",       end: true, icon: "overview"   },
+        { to: "/production",label: "Production",            icon: "production" },
+      ];
+    }
+
+    return [];
+  };
+
+  const navItems = getNavItems();
+
   return (
     <nav className="sidebar" aria-label="Main navigation">
-      {/* Segmented Colorful Logo Matching Screenshot */}
+      {/* Segmented Colorful Logo */}
       <NavLink to="/" title="Supply Chain Control Tower" style={{ textDecoration: "none" }}>
         <div className="sidebar-logo">
           <svg viewBox="0 0 40 40" width="34" height="34" fill="none">
-            {/* Red top left curve */}
             <path d="M20 6C12.268 6 6 12.268 6 20h7c0-3.866 3.134-7 7-7V6z" fill="#EF4444"/>
-            {/* Orange/Yellow bottom left curve */}
             <path d="M6 20c0 7.732 6.268 14 14 14v-7c-3.866 0-7-3.134-7-7H6z" fill="#F59E0B"/>
-            {/* Green bottom right curve */}
             <path d="M20 34c7.732 0 14-6.268 14-14h-7c0 3.866-3.134 7-7 7v7z" fill="#10B981"/>
-            {/* Cyan/Blue top right curve */}
             <path d="M34 20c0-7.732-6.268-14-14-14v7c3.866 0 7 3.134 7 7h7z" fill="#00C6FF"/>
-            {/* Center dot/ring */}
             <circle cx="20" cy="20" r="3.5" fill="#1E2337"/>
           </svg>
         </div>
       </NavLink>
 
       {/* Navigation Icons */}
-      <div className="sidebar-nav">
-        {NAV_ITEMS.map((item) => (
+      <div className="sidebar-nav" style={{ flexGrow: 1 }}>
+        {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -139,6 +151,30 @@ export default function Sidebar() {
             <span className="sidebar-nav-label">{item.label}</span>
           </NavLink>
         ))}
+      </div>
+
+      {/* Logout button at the bottom */}
+      <div className="sidebar-nav" style={{ marginTop: "auto" }}>
+        <button
+          onClick={logout}
+          className="sidebar-nav-item"
+          title="Logout"
+          style={{
+            background: "none",
+            border: "none",
+            width: "100%",
+            color: "#8E9BAE"
+          }}
+        >
+          <div className="sidebar-icon-wrap">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </div>
+          <span className="sidebar-nav-label">Logout</span>
+        </button>
       </div>
     </nav>
   );

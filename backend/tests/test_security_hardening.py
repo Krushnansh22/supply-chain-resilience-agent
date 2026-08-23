@@ -16,7 +16,7 @@ Comprehensive security test suite — 9 layers, 45 test cases.
 
 import time
 from collections import deque
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import Request
@@ -28,9 +28,9 @@ from app.middleware.client_ip import get_trusted_client_ip
 from app.middleware.rate_limiter import (
     _store,
     _lock,
-    purge_empty_and_idle_keys,
-    record_and_check_rate_limit,
 )
+from app.core.auth_security import create_access_token
+from app.core.deps import get_mongo_db
 
 import mongomock
 from app.mongo_database import get_mongo_db
@@ -72,6 +72,29 @@ def isolate_test():
 # ===========================================================================
 # GAP 1 — X-Forwarded-For spoofing / Trusted Proxy validation
 # ===========================================================================
+
+@pytest.fixture
+def client(mock_db):
+    app.dependency_overrides[get_mongo_db] = lambda: mock_db
+    settings.API_KEY = ""
+    settings.BACKEND_API_KEY = ""
+    settings.GENERAL_RATE_LIMIT_MAX = 10_000
+
+    # Create a test admin user and generate a JWT token for authentication
+    mock_db["users"].insert_one({
+        "user_id": "TEST-ADMIN-001",
+        "name": "Test Admin",
+        "email": "test@test.com",
+        "password_hash": "",
+        "role": "admin",
+        "is_active": True,
+    })
+
+    token = create_access_token(subject="TEST-ADMIN-001", role="admin")
+    c = TestClient(app, headers={"Authorization": f"Bearer {token}"})
+    yield c
+    app.dependency_overrides.pop(get_mongo_db, None)
+
 
 def test_gap1_spoofed_xff_ignored_when_no_trusted_proxy():
     """

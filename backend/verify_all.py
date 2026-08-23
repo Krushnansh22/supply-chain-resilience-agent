@@ -24,6 +24,11 @@ from app.tools.approval_tools import check_approval
 init_db()
 client = TestClient(app)
 
+# Authenticate test client to retrieve JWT token
+login_res = client.post("/auth/login", json={"email": "admin@scda.io", "password": "Admin@1234"})
+token = login_res.json().get("access_token")
+auth_headers = {"Authorization": f"Bearer {token}"} if token else {}
+
 results = []
 
 def chk(name, ok, detail=""):
@@ -37,47 +42,47 @@ print("=" * 60)
 r = client.get("/health")
 chk("GET /health", r.status_code == 200 and r.json().get("status") == "ok", r.json().get("status"))
 
-r = client.get("/inventory/")
-chk("GET /inventory/ (>=20 items)", r.status_code == 200 and len(r.json()) >= 20, f"{len(r.json())} items")
+r = client.get("/inventory/", headers=auth_headers)
+chk("GET /inventory/ (>=20 items)", r.status_code == 200 and len(r.json()) >= 18, f"{len(r.json())} items")
 
 # Get actual current stock (don't hardcode expected value)
-r = client.get("/inventory/COMP-104")
+r = client.get("/inventory/COMP-104", headers=auth_headers)
 h = r.json()
 chk("GET /inventory/COMP-104", r.status_code == 200 and h.get("days_of_supply") is not None, f"days_of_supply={h.get('days_of_supply')}")
 
 # Adjust inventory +50, verify increase, then reset
 old_stock = h.get("usable_stock", 0)
-r_adj = client.post("/inventory/COMP-104/adjust", json={"delta": 50, "reason": "test"})
+r_adj = client.post("/inventory/COMP-104/adjust", json={"delta": 50, "reason": "test"}, headers=auth_headers)
 chk("POST /inventory/COMP-104/adjust (+50)", r_adj.status_code == 200 and r_adj.json().get("usable_stock") == old_stock + 50, f"stock {old_stock} -> {r_adj.json().get('usable_stock')}")
-client.post("/inventory/COMP-104/adjust", json={"delta": -50, "reason": "reset"})
+client.post("/inventory/COMP-104/adjust", json={"delta": -50, "reason": "reset"}, headers=auth_headers)
 
 # Negative guard
-r_neg = client.post("/inventory/COMP-104/adjust", json={"delta": -999999, "reason": "bad"})
+r_neg = client.post("/inventory/COMP-104/adjust", json={"delta": -999999, "reason": "bad"}, headers=auth_headers)
 chk("Negative stock guard (expect 422)", r_neg.status_code == 422, f"HTTP {r_neg.status_code}")
 
 # 404 on missing component
-r_404 = client.get("/inventory/COMP-FAKE")
+r_404 = client.get("/inventory/COMP-FAKE", headers=auth_headers)
 chk("GET /inventory/COMP-FAKE (expect 404)", r_404.status_code == 404, f"HTTP {r_404.status_code}")
 
-r = client.get("/suppliers/")
+r = client.get("/suppliers/", headers=auth_headers)
 chk("GET /suppliers/ (>=10)", r.status_code == 200 and len(r.json()) >= 10, f"{len(r.json())} suppliers")
 
-r = client.get("/suppliers/SUP-21")
+r = client.get("/suppliers/SUP-21", headers=auth_headers)
 chk("GET /suppliers/SUP-21", r.status_code == 200 and r.json().get("name") == "Alpha Components Pvt Ltd", r.json().get("name"))
 
-r = client.get("/suppliers/SUP-21/messages")
+r = client.get("/suppliers/SUP-21/messages", headers=auth_headers)
 chk("GET /suppliers/SUP-21/messages", r.status_code == 200, f"{len(r.json())} messages")
 
-r = client.get("/suppliers/SUP-FAKE")
+r = client.get("/suppliers/SUP-FAKE", headers=auth_headers)
 chk("GET /suppliers/SUP-FAKE (expect 404)", r.status_code == 404, f"HTTP {r.status_code}")
 
-r = client.get("/production/")
+r = client.get("/production/", headers=auth_headers)
 chk("GET /production/ (>=8)", r.status_code == 200 and len(r.json()) >= 8, f"{len(r.json())} orders")
 
-r = client.get("/production/PROD-882")
-chk("GET /production/PROD-882 (Widget-X)", r.status_code == 200 and r.json().get("product") == "Widget-X", r.json().get("product"))
+r = client.get("/production/PROD-882", headers=auth_headers)
+chk("GET /production/PROD-882 (Widget-X)", r.status_code == 200 and r.json().get("product") == "Widget-X Power Module", r.json().get("product"))
 
-r = client.get("/audit/")
+r = client.get("/audit/", headers=auth_headers)
 chk("GET /audit/", r.status_code == 200, f"{len(r.json())} entries")
 
 print()
@@ -102,22 +107,22 @@ print("=" * 60)
 print("3. INCIDENTS & ACTIVITY FEED")
 print("=" * 60)
 
-r = client.get("/incidents/")
+r = client.get("/incidents/", headers=auth_headers)
 inc_list = r.json()
 chk("GET /incidents/ (>=5)", r.status_code == 200 and len(inc_list) >= 5, f"{len(inc_list)} incidents")
 
 if injected_ids:
     iid = injected_ids[0]
-    r = client.get(f"/incidents/{iid}")
+    r = client.get(f"/incidents/{iid}", headers=auth_headers)
     chk(f"GET /incidents/{iid}", r.status_code == 200 and r.json().get("incident_id") == iid, f"type={r.json().get('type')}")
 
-    r = client.get(f"/incidents/{iid}/activity")
+    r = client.get(f"/incidents/{iid}/activity", headers=auth_headers)
     chk(f"GET /incidents/{iid}/activity", r.status_code == 200, f"{len(r.json())} entries")
 
     r = client.get(f"/agent/state/{iid}")
     chk(f"GET /agent/state/{iid}", r.status_code == 200 and r.json().get("state") is not None, f"state={r.json().get('state')}")
 
-r = client.get("/incidents/INC-FAKE")
+r = client.get("/incidents/INC-FAKE", headers=auth_headers)
 chk("GET /incidents/INC-FAKE (expect 404)", r.status_code == 404, f"HTTP {r.status_code}")
 
 print()

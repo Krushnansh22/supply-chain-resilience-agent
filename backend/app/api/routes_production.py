@@ -9,10 +9,11 @@ from pymongo.database import Database
 from app.mongo_database import get_mongo_db
 from app.repositories.production_order_repository import ProductionOrderRepository
 from app.schemas.common import ProductionOrderOut
+from app.core.deps import require_admin_or_user
 
 router = APIRouter()
 
-_PRODUCTION_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
+_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
 def get_repo(db: Database = Depends(get_mongo_db)):
@@ -20,18 +21,25 @@ def get_repo(db: Database = Depends(get_mongo_db)):
 
 
 @router.get("/", response_model=list[ProductionOrderOut])
-def list_production_orders(repo: ProductionOrderRepository = Depends(get_repo)):
+def list_production_orders(
+    repo: ProductionOrderRepository = Depends(get_repo),
+    current_user: dict = Depends(require_admin_or_user),
+):
+    """
+    GET /production/
+    Admin and Procurement User roles can view production orders.
+    Supplier role cannot (returns 403).
+    """
     return repo.list_all()
 
 
 @router.get("/{production_id}", response_model=ProductionOrderOut)
 def get_production_order(
-    production_id: str = Path(..., pattern=_PRODUCTION_ID_PATTERN, min_length=1, max_length=32),
+    production_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     repo: ProductionOrderRepository = Depends(get_repo),
+    current_user: dict = Depends(require_admin_or_user),
 ):
     row = repo.get_by_production_id(production_id)
     if not row:
         raise HTTPException(status_code=404, detail="production order not found")
     return row
-
-# TODO (Dev3): expose a /production/{id}/risk endpoint wrapping decision_engine/production_risk.py
