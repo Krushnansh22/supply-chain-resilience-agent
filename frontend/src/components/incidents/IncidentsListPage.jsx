@@ -14,6 +14,8 @@ export default function IncidentsListPage() {
   const [error, setError] = useState(null);
   const [severityFilter, setSeverityFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState("severity");
+  const [sortAsc, setSortAsc] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -53,11 +55,9 @@ export default function IncidentsListPage() {
 
   const filtered = useMemo(() => {
     return incidents.filter((incident) => {
-      // Severity Filter
       if (severityFilter !== "ALL" && incident.severity !== severityFilter) {
         return false;
       }
-      // Search Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesId = incident.incident_id?.toLowerCase().includes(q);
@@ -70,6 +70,27 @@ export default function IncidentsListPage() {
       return true;
     });
   }, [incidents, severityFilter, searchQuery]);
+
+  const handleSort = (field) => {
+    if (sortField === field) setSortAsc(!sortAsc);
+    else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+  };
+
+  const sortedFiltered = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let valA = a[sortField] || "";
+      let valB = b[sortField] || "";
+      if (sortField === "severity") {
+        valA = SEVERITY_ORDER.indexOf(valA);
+        valB = SEVERITY_ORDER.indexOf(valB);
+        return sortAsc ? valA - valB : valB - valA;
+      }
+      return sortAsc ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA));
+    });
+  }, [filtered, sortField, sortAsc]);
 
   if (loading) {
     return (
@@ -216,17 +237,27 @@ export default function IncidentsListPage() {
             <table className="custom-data-table">
               <thead>
                 <tr>
-                  <th style={{ width: "110px" }}>Severity</th>
-                  <th style={{ minWidth: "160px" }}>Incident Reference</th>
-                  <th style={{ width: "130px" }}>Component</th>
-                  <th style={{ width: "130px" }}>Purchase Order</th>
+                  <th onClick={() => handleSort("severity")} style={{ width: "110px", cursor: "pointer", userSelect: "none" }}>
+                    Severity {sortField === "severity" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
+                  <th onClick={() => handleSort("incident_id")} style={{ minWidth: "160px", cursor: "pointer", userSelect: "none" }}>
+                    Incident Reference {sortField === "incident_id" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
+                  <th onClick={() => handleSort("affected_component")} style={{ width: "130px", cursor: "pointer", userSelect: "none" }}>
+                    Component {sortField === "affected_component" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
+                  <th onClick={() => handleSort("affected_po")} style={{ width: "130px", cursor: "pointer", userSelect: "none" }}>
+                    Purchase Order {sortField === "affected_po" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
                   <th style={{ minWidth: "240px" }}>Production Line Impact</th>
-                  <th style={{ width: "140px" }}>Status</th>
+                  <th onClick={() => handleSort("status")} style={{ width: "140px", cursor: "pointer", userSelect: "none" }}>
+                    Status {sortField === "status" ? (sortAsc ? "▲" : "▼") : ""}
+                  </th>
                   <th style={{ width: "100px", textAlign: "right" }}>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((incident) => {
+                {sortedFiltered.map((incident) => {
                   const affected = productionByComponent[incident.affected_component] || [];
                   return (
                     <tr key={incident.incident_id}>

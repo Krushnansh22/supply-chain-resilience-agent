@@ -57,6 +57,8 @@ def fetch_report_context(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     include_diagnostics: bool = False,
+    order_id: Optional[str] = None,
+    supplier_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Collects complete operational facts from MongoDB:
@@ -658,6 +660,8 @@ def generate_report_bundle(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     include_diagnostics: bool = False,
+    order_id: Optional[str] = None,
+    supplier_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Convenience method that aggregates context, runs LLM synthesis,
@@ -669,6 +673,8 @@ def generate_report_bundle(
         start_date=start_date,
         end_date=end_date,
         include_diagnostics=include_diagnostics,
+        order_id=order_id,
+        supplier_id=supplier_id,
     )
     narrative = generate_report_narrative(context)
     pdf_bytes = build_operations_pdf(context, narrative)

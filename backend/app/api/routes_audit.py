@@ -108,6 +108,8 @@ def operator_report_preview(
     start_date: Optional[str] = Query(None, max_length=40),
     end_date: Optional[str] = Query(None, max_length=40),
     include_diagnostics: bool = Query(False),
+    order_id: Optional[str] = Query(None, max_length=64),
+    supplier_id: Optional[str] = Query(None, max_length=64),
     db: Database = Depends(get_mongo_db),
     current_user: dict = Depends(require_admin),
 ):
@@ -132,6 +134,8 @@ def operator_report_preview(
         start_date=start,
         end_date=end,
         include_diagnostics=include_diagnostics,
+        order_id=order_id,
+        supplier_id=supplier_id,
     )
     narrative = generate_report_narrative(context)
     return {
@@ -153,6 +157,8 @@ def operator_report_pdf(
     start_date: Optional[str] = Query(None, max_length=40),
     end_date: Optional[str] = Query(None, max_length=40),
     include_diagnostics: bool = Query(False),
+    order_id: Optional[str] = Query(None, max_length=64),
+    supplier_id: Optional[str] = Query(None, max_length=64),
     db: Database = Depends(get_mongo_db),
     current_user: dict = Depends(require_admin),
 ):
@@ -175,12 +181,15 @@ def operator_report_pdf(
         start_date=start,
         end_date=end,
         include_diagnostics=include_diagnostics,
+        order_id=order_id,
+        supplier_id=supplier_id,
     )
 
-    suffix = incident_id or "operations"
+    suffix = order_id or supplier_id or incident_id or "operations"
     filename = f"supply-chain-report-{suffix}-{datetime.now(timezone.utc).date().isoformat()}.pdf"
     return Response(
         content=bundle["pdf_bytes"],
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
