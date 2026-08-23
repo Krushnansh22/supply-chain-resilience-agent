@@ -7,38 +7,57 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { getSupplier } from "../../api/suppliers.js";
+import { getSupplier, listSuppliers, getSupplierMessages } from "../../api/suppliers.js";
 import { apiRequest } from "../../api/client.js";
 
 export default function SupplierDashboard() {
   const { user } = useAuth();
   const [supplierInfo, setSupplierInfo] = useState(null);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [rfqResponses, setRfqResponses] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const loadSupplierData = useCallback(async () => {
-    if (!user?.supplier_id) {
-      setError("No supplier profile linked to this user.");
-      setLoading(false);
-      return;
-    }
-
     try {
-      // 1. Fetch supplier profile / metrics
-      const info = await getSupplier(user.supplier_id);
+      // 1. Resolve supplier profile & ID
+      let targetSupplierId = user?.supplier_id;
+      let info = null;
+
+      if (targetSupplierId) {
+        info = await getSupplier(targetSupplierId).catch(() => null);
+      }
+
+      if (!info) {
+        const suppliersList = await listSuppliers().catch(() => []);
+        if (Array.isArray(suppliersList) && suppliersList.length > 0) {
+          info = suppliersList[0];
+          targetSupplierId = info.supplier_id;
+        }
+      }
+
+      if (!info && !targetSupplierId) {
+        setError("No supplier profile linked to this user account.");
+        setLoading(false);
+        return;
+      }
+
       setSupplierInfo(info);
 
       // 2. Fetch active POs and filter to this supplier
       const allPOs = await apiRequest("/integrations/purchase-orders/active").catch(() => []);
       const myPOs = Array.isArray(allPOs)
-        ? allPOs.filter(po => po.supplier_id === user.supplier_id)
+        ? allPOs.filter(po => !targetSupplierId || po.supplier_id === targetSupplierId)
         : [];
       setPurchaseOrders(myPOs);
 
-      // 3. RFQ responses — fallback gracefully (no dedicated endpoint yet)
-      setRfqResponses([]);
+      // 3. Fetch message thread history
+      if (targetSupplierId) {
+        const msgs = await getSupplierMessages(targetSupplierId).catch(() => []);
+        setMessages(Array.isArray(msgs) ? msgs : []);
+      }
+
+      setError(null);
     } catch (err) {
       console.error("SupplierDashboard load error:", err);
       setError("Failed to fetch supplier operational data.");
@@ -175,7 +194,7 @@ export default function SupplierDashboard() {
                   <tr key={po.po_id}>
                     <td style={{ fontFamily: "var(--font-mono)", fontWeight: "600" }}>{po.po_id}</td>
                     <td>{po.quantity} units</td>
-                    <td style={{ fontWeight: "600" }}>${po.total_value?.toLocaleString()}</td>
+                    <td style={{ fontWeight: "600" }}>₹{po.total_value?.toLocaleString()}</td>
                     <td>{po.promised_delivery ? new Date(po.promised_delivery).toLocaleDateString() : "N/A"}</td>
                     <td style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{po.notes || "—"}</td>
                     <td>
@@ -192,6 +211,44 @@ export default function SupplierDashboard() {
                 {purchaseOrders.length === 0 && (
                   <tr>
                     <td colSpan="6" className="empty-state">No purchase orders assigned.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Message Thread & Inquiries */}
+        <div className="dashboard-card" style={{ marginTop: "20px" }}>
+          <div className="card-header-row">
+            <h3 className="card-header-title">Communication & Incident Dispatch Log</h3>
+          </div>
+          <div className="deliveries-table-wrap">
+            <table className="custom-data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Sender</th>
+                  <th>Message / Inquiry</th>
+                  <th>Incident Ref</th>
+                </tr>
+              </thead>
+              <tbody>
+                {messages.map((m, idx) => (
+                  <tr key={idx}>
+                    <td style={{ fontSize: "12px", whiteSpace: "nowrap" }}>
+                      {m.timestamp ? new Date(m.timestamp).toLocaleString() : "Recent"}
+                    </td>
+                    <td style={{ fontWeight: "600" }}>{m.sender || "Control Tower Agent"}</td>
+                    <td style={{ fontSize: "13px" }}>{m.message || m.body || m.content || JSON.stringify(m)}</td>
+                    <td>
+                      <span className="status-pill info">{m.incident_id || "SYSTEM"}</span>
+                    </td>
+                  </tr>
+                ))}
+                {messages.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="empty-state">No message dispatches recorded.</td>
                   </tr>
                 )}
               </tbody>

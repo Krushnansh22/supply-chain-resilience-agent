@@ -32,12 +32,13 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true); // true while validating token with backend
   const [authError, setAuthError] = useState(null);
 
-  /** Persist auth state to localStorage */
+  /** Persist auth state to localStorage and context synchronously */
   const persistAuth = useCallback((accessToken, userObj) => {
     localStorage.setItem(TOKEN_KEY, accessToken);
     localStorage.setItem(USER_KEY, JSON.stringify(userObj));
     setToken(accessToken);
     setUser(userObj);
+    setLoading(false);
   }, []);
 
   /** Clear all auth state */
@@ -46,30 +47,41 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
+    setLoading(false);
   }, []);
 
   /** Restore session on mount / page refresh */
   useEffect(() => {
+    let isMounted = true;
+
     async function restoreSession() {
       const storedToken = localStorage.getItem(TOKEN_KEY);
       if (!storedToken) {
-        setLoading(false);
+        if (isMounted) setLoading(false);
         return;
       }
 
       try {
-        // Validate token against backend — if expired/invalid, /auth/me returns 401
+        // Validate token against backend
         const userData = await authApi.me(storedToken);
-        setUser(userData);
-        setToken(storedToken);
-      } catch {
-        // Token invalid or expired — clear stored state
-        clearAuth();
+        if (isMounted) {
+          setUser(userData);
+          setToken(storedToken);
+        }
+      } catch (err) {
+        // Only clear credentials if server explicitly returned 401 or 403
+        if (err.status === 401 || err.status === 403) {
+          if (isMounted) clearAuth();
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
     restoreSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, [clearAuth]);
 
   /** Login and persist session */

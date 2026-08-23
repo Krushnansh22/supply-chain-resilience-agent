@@ -62,9 +62,20 @@ function AppShellLayout() {
 /** Redirects to the role-appropriate home page */
 function DashboardHome() {
   const { user } = useAuth();
-  if (user?.role === "admin")    return <OverviewDashboard />;
-  if (user?.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
-  return <Navigate to="/user-dashboard" replace />;
+  let activeUser = user;
+  if (!activeUser) {
+    try {
+      const stored = localStorage.getItem("scda_auth_user");
+      if (stored) activeUser = JSON.parse(stored);
+    } catch {
+      activeUser = null;
+    }
+  }
+
+  if (activeUser?.role === "admin")    return <OverviewDashboard />;
+  if (activeUser?.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
+  if (activeUser?.role === "user")     return <Navigate to="/user-dashboard" replace />;
+  return <Navigate to="/landing" replace />;
 }
 
 function AppRoutes() {
@@ -76,9 +87,20 @@ function AppRoutes() {
     return () => window.removeEventListener("scda_unauthorized", handle);
   }, [handleUnauthorized]);
 
+  // Check stored user as fallback for initial loader
+  let activeUser = user;
+  if (!activeUser) {
+    try {
+      const stored = localStorage.getItem("scda_auth_user");
+      if (stored) activeUser = JSON.parse(stored);
+    } catch {
+      activeUser = null;
+    }
+  }
+
   // Only block on the full-screen spinner when token is being validated and
   // no user is hydrated from localStorage yet.
-  if (loading && !user) {
+  if (loading && !activeUser) {
     return (
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -109,10 +131,10 @@ function AppRoutes() {
 
         {/* Role-specific dashboards */}
         <Route path="/supplier-dashboard"
-          element={<ProtectedRoute allowedRoles={["supplier"]}><SupplierDashboard /></ProtectedRoute>}
+          element={<ProtectedRoute allowedRoles={["admin", "supplier"]}><SupplierDashboard /></ProtectedRoute>}
         />
         <Route path="/user-dashboard"
-          element={<ProtectedRoute allowedRoles={["user"]}><UserDashboard /></ProtectedRoute>}
+          element={<ProtectedRoute allowedRoles={["admin", "user"]}><UserDashboard /></ProtectedRoute>}
         />
 
         {/* Admin-only pages */}

@@ -10,13 +10,21 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, loading } = useAuth();
 
-  // Only block on the loading spinner if we genuinely don't know the auth state yet
-  // (i.e. there's a token being validated but no user hydrated from localStorage).
-  // If user is already available (hydrated synchronously from localStorage), skip
-  // the spinner so navigation immediately after login works correctly.
-  if (loading && !user) {
+  // Get active user from state or synchronous localStorage fallback
+  let activeUser = user;
+  if (!activeUser) {
+    try {
+      const stored = localStorage.getItem("scda_auth_user");
+      if (stored) activeUser = JSON.parse(stored);
+    } catch {
+      activeUser = null;
+    }
+  }
+
+  // Only block on loading spinner if there's no user in state OR localStorage while loading
+  if (loading && !activeUser) {
     return (
       <div style={{
         display: "flex",
@@ -32,15 +40,15 @@ export default function ProtectedRoute({ children, allowedRoles }) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!activeUser) {
     return <Navigate to="/landing" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  if (allowedRoles && !allowedRoles.includes(activeUser.role)) {
     // Redirect to their default dashboard based on their role
-    if (user.role === "admin") {
+    if (activeUser.role === "admin") {
       return <Navigate to="/" replace />;
-    } else if (user.role === "supplier") {
+    } else if (activeUser.role === "supplier") {
       return <Navigate to="/supplier-dashboard" replace />;
     } else {
       return <Navigate to="/user-dashboard" replace />;

@@ -26,10 +26,21 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Check stored user as fallback
+  let activeUser = user;
+  if (!activeUser) {
+    try {
+      const stored = localStorage.getItem("scda_auth_user");
+      if (stored) activeUser = JSON.parse(stored);
+    } catch {
+      activeUser = null;
+    }
+  }
+
   // If already authenticated, redirect to the right dashboard
-  if (isAuthenticated && user) {
-    if (user.role === "admin")    return <Navigate to="/" replace />;
-    if (user.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
+  if (activeUser) {
+    if (activeUser.role === "admin")    return <Navigate to="/" replace />;
+    if (activeUser.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
     return <Navigate to="/user-dashboard" replace />;
   }
 
@@ -73,11 +84,11 @@ export default function RegisterPage() {
 
       // Redirect to correct dashboard
       if (newUser.role === "admin") {
-        navigate("/");
+        navigate("/", { replace: true });
       } else if (newUser.role === "supplier") {
-        navigate("/supplier-dashboard");
+        navigate("/supplier-dashboard", { replace: true });
       } else {
-        navigate("/user-dashboard");
+        navigate("/user-dashboard", { replace: true });
       }
     } catch (err) {
       setError(err.message || "Failed to register. Please try again.");

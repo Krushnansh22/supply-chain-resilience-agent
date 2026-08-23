@@ -14,5 +14,10 @@ const SEVERITY_CLASS = {
 
 export default function SeverityBadge({ severity }) {
   if (!severity) return null;
-  return <span className={`badge ${SEVERITY_CLASS[severity] || "badge-neutral"}`}>{severity}</span>;
+  return (
+    <span className={`badge ${SEVERITY_CLASS[severity] || "badge-neutral"}`}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block", opacity: 0.9 }} />
+      {severity}
+    </span>
+  );
 }

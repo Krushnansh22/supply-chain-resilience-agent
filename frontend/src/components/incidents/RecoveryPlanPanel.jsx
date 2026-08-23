@@ -13,8 +13,8 @@ export default function RecoveryPlanPanel({ plan, incident, incidentId, onExecut
 
   const recommended = plan.options?.find((o) => o.option_id === plan.recommended_option_id);
   const approvalReason = plan.requires_human_approval
-    ? `This plan costs $${recommended?.total_cost?.toLocaleString() || 0} and exceeds the $${plan.approval_threshold_usd?.toLocaleString() || 50000} autonomous threshold.`
-    : `This plan costs $${recommended?.total_cost?.toLocaleString() || 0} and is within the $${plan.approval_threshold_usd?.toLocaleString() || 50000} autonomous threshold.`;
+    ? `This plan costs ₹${recommended?.total_cost?.toLocaleString() || 0} and exceeds the ₹${plan.approval_threshold_usd?.toLocaleString() || 50000} autonomous threshold.`
+    : `This plan costs ₹${recommended?.total_cost?.toLocaleString() || 0} and is within the ₹${plan.approval_threshold_usd?.toLocaleString() || 50000} autonomous threshold.`;
 
   const handleExecute = async () => {
     setExecuting(true);
@@ -45,11 +45,11 @@ export default function RecoveryPlanPanel({ plan, incident, incidentId, onExecut
             )}
             {opt.allocations.map((a) => (
               <div key={a.supplier_id} className="plan-option-alloc">
-                {a.supplier_id} → {a.quantity} units @ ${a.unit_price}/unit, {a.delivery_days}d delivery
+                {a.supplier_id} → {a.quantity} units @ ₹{a.unit_price}/unit, {a.delivery_days}d delivery
               </div>
             ))}
             <div className="plan-option-total">
-              Total: ${opt.total_cost.toLocaleString()}
+              Total: ₹{opt.total_cost.toLocaleString()}
               {opt.rejection_reason && <> — Reason: {opt.rejection_reason}</>}
             </div>
           </div>

@@ -57,11 +57,11 @@ export default function ApprovalCard({ plan, incident, onDecided }) {
       <div className="approval-cost-grid">
         <div className="approval-cost-item">
           <div className="kpi-label" style={{ fontSize: 11 }}>ESTIMATED COST</div>
-          <div className="kpi-value-sm">${recommended?.total_cost.toLocaleString()}</div>
+          <div className="kpi-value-sm">₹{recommended?.total_cost.toLocaleString()}</div>
         </div>
         <div className="approval-cost-item">
           <div className="kpi-label" style={{ fontSize: 11 }}>APPROVAL THRESHOLD</div>
-          <div className="kpi-value-sm">${plan.approval_threshold_usd.toLocaleString()}</div>
+          <div className="kpi-value-sm">₹{plan.approval_threshold_usd.toLocaleString()}</div>
         </div>
         <div className="approval-cost-item">
           <div className="kpi-label" style={{ fontSize: 11 }}>DELIVERY</div>
@@ -71,7 +71,7 @@ export default function ApprovalCard({ plan, incident, onDecided }) {
 
       <p style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 14 }}>
         <strong style={{ color: "var(--text-primary)" }}>Why approval is required: </strong>
-        This plan costs ${recommended?.total_cost.toLocaleString()} and exceeds the ${plan.approval_threshold_usd.toLocaleString()} autonomous-execution limit by ${((recommended?.total_cost ?? 0) - plan.approval_threshold_usd).toLocaleString()}.
+        This plan costs ₹{recommended?.total_cost.toLocaleString()} and exceeds the ₹{plan.approval_threshold_usd.toLocaleString()} autonomous-execution limit by ₹{((recommended?.total_cost ?? 0) - plan.approval_threshold_usd).toLocaleString()}.
       </p>
 
       <p style={{ fontSize: 13 }}>
@@ -84,7 +84,7 @@ export default function ApprovalCard({ plan, incident, onDecided }) {
           <div className="kpi-label" style={{ fontSize: 11, marginBottom: 4 }}>ALTERNATIVES CONSIDERED</div>
           {alternatives.map((opt) => (
             <div key={opt.option_id} className="plan-option-alloc" style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 6, marginTop: 4 }}>
-              <strong>Option {opt.option_id}</strong> — ${opt.total_cost.toLocaleString()}, {opt.max_delivery_days}d{" "}
+              <strong>Option {opt.option_id}</strong> — ₹{opt.total_cost.toLocaleString()}, {opt.max_delivery_days}d{" "}
               {opt.constraints_satisfied ? (
                 <span className="badge badge-low">VALID</span>
               ) : (

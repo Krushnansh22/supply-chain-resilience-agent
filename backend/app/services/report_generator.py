@@ -248,13 +248,13 @@ def _build_deterministic_narrative(context: Dict[str, Any]) -> Dict[str, Any]:
         po_val = stats["total_po_value_exposed"]
         impact = (
             f"Inventory analysis indicates stock runway constraints across key parts: {inv_items_text}. "
-            f"A total of {prod_count} active production order(s) and ${po_val:,.2f} in purchase order value "
+            f"A total of {prod_count} active production order(s) and Rs. {po_val:,.2f} in purchase order value "
             f"are currently exposed to delivery variance. Without mitigation, critical stockouts could compromise "
             f"production continuity within {stats['min_days_of_supply']} days."
         )
     else:
         impact = (
-            f"Overall financial exposure across monitored purchase orders stands at ${stats['total_po_value_exposed']:,.2f}. "
+            f"Overall financial exposure across monitored purchase orders stands at Rs. {stats['total_po_value_exposed']:,.2f}. "
             f"Production schedules remain operational, though supplier delivery timelines require close tracking."
         )
 
@@ -267,15 +267,15 @@ def _build_deterministic_narrative(context: Dict[str, Any]) -> Dict[str, Any]:
         reason = primary_plan.get("recommendation_reason") or "Optimal balance between recovery speed and financial cost."
         
         gov_text = (
-            f"At ${cost:,.2f}, this recovery plan exceeds the ${threshold:,.2f} autonomous threshold, "
+            f"At Rs. {cost:,.2f}, this recovery plan exceeds the Rs. {threshold:,.2f} autonomous threshold, "
             f"requiring Human-in-the-Loop coordinator authorization."
             if stats["requires_human_approval"]
-            else f"At ${cost:,.2f}, this plan is below the ${threshold:,.2f} threshold and is authorized for autonomous execution."
+            else f"At Rs. {cost:,.2f}, this plan is below the Rs. {threshold:,.2f} threshold and is authorized for autonomous execution."
         )
 
         recovery_strategy = (
             f"The decision engine evaluated alternative mitigation pathways and selected Option '{rec_opt.get('option_id')}' "
-            f"utilizing {supp_name} (Estimated lead time: {lead_time} days, Total cost: ${cost:,.2f}). "
+            f"utilizing {supp_name} (Estimated lead time: {lead_time} days, Total cost: Rs. {cost:,.2f}). "
             f"Rationale: {reason}. {gov_text}"
         )
     else:
@@ -288,7 +288,7 @@ def _build_deterministic_narrative(context: Dict[str, Any]) -> Dict[str, Any]:
     threshold = stats["approval_threshold_usd"]
     governance = (
         f"All automated decisions strictly adhere to corporate governance limits. Recovery expenditures above "
-        f"${threshold:,.2f} USD require formal coordinator sign-off. Full cryptographic audit trails and ERP "
+        f"Rs. {threshold:,.2f} require formal coordinator sign-off. Full cryptographic audit trails and ERP "
         f"synchronization events are recorded for every state transition."
     )
 
@@ -475,8 +475,8 @@ def build_operations_pdf(context: Dict[str, Any], narrative: Dict[str, Any]) -> 
     cards_data = [
         {"title": "SEVERITY", "value": sev, "sub": primary_inc.get("status", "ACTIVE") if primary_inc else "NORMAL", "bg": sev_bg, "fg": sev_fg},
         {"title": "STOCK RUNWAY", "value": f"{stats['min_days_of_supply']} Days", "sub": f"{len(inventory)} Parts Monitored", "bg": (241, 245, 249), "fg": (30, 58, 138)},
-        {"title": "EXPOSED PO VALUE", "value": f"${stats['total_po_value_exposed']:,.0f}", "sub": f"{len(pos)} Orders Tracked", "bg": (241, 245, 249), "fg": (30, 58, 138)},
-        {"title": "GOVERNANCE", "value": "HUMAN REVIEW" if stats["requires_human_approval"] else "AUTONOMOUS", "sub": f"Threshold: ${stats['approval_threshold_usd']:,.0f}", "bg": (254, 243, 199) if stats["requires_human_approval"] else (240, 253, 244), "fg": (180, 83, 9) if stats["requires_human_approval"] else (22, 101, 52)},
+        {"title": "EXPOSED PO VALUE", "value": f"Rs. {stats['total_po_value_exposed']:,.0f}", "sub": f"{len(pos)} Orders Tracked", "bg": (241, 245, 249), "fg": (30, 58, 138)},
+        {"title": "GOVERNANCE", "value": "HUMAN REVIEW" if stats["requires_human_approval"] else "AUTONOMOUS", "sub": f"Threshold: Rs. {stats['approval_threshold_usd']:,.0f}", "bg": (254, 243, 199) if stats["requires_human_approval"] else (240, 253, 244), "fg": (180, 83, 9) if stats["requires_human_approval"] else (22, 101, 52)},
     ]
 
     for idx, card in enumerate(cards_data):
@@ -593,7 +593,7 @@ def build_operations_pdf(context: Dict[str, Any], narrative: Dict[str, Any]) -> 
             pdf.cell(opt_cols[0], 5, sanitize_text(f"{opt.get('option_id')}{' [REC]' if is_rec else ''}"), border=1, fill=True)
             pdf.cell(opt_cols[1], 5, sanitize_text(str(opt.get("action", opt.get("description", "-")))[:32]), border=1, fill=True)
             pdf.cell(opt_cols[2], 5, sanitize_text(str(opt.get("supplier_name", opt.get("supplier_id", "-")))[:24]), border=1, fill=True)
-            pdf.cell(opt_cols[3], 5, sanitize_text(f"${float(opt.get('total_cost', 0)):,.2f}"), border=1, fill=True, align="R")
+            pdf.cell(opt_cols[3], 5, sanitize_text(f"Rs. {float(opt.get('total_cost', 0)):,.2f}"), border=1, fill=True, align="R")
             pdf.cell(opt_cols[4], 5, sanitize_text(f"{opt.get('lead_time_days', '-')} days"), border=1, fill=True, align="R")
             pdf.cell(opt_cols[5], 5, sanitize_text("RECOMMENDED" if is_rec else "ALTERNATIVE"), border=1, fill=True, align="C")
             pdf.ln()

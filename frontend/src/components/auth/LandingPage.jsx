@@ -10,12 +10,23 @@ import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function LandingPage() {
-  const { isAuthenticated, user } = useAuth();
+  const { user } = useAuth();
+
+  // Check stored user as fallback
+  let activeUser = user;
+  if (!activeUser) {
+    try {
+      const stored = localStorage.getItem("scda_auth_user");
+      if (stored) activeUser = JSON.parse(stored);
+    } catch {
+      activeUser = null;
+    }
+  }
 
   // If already logged in, redirect to correct dashboard
-  if (isAuthenticated && user) {
-    if (user.role === "admin") return <Navigate to="/" replace />;
-    if (user.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
+  if (activeUser) {
+    if (activeUser.role === "admin") return <Navigate to="/" replace />;
+    if (activeUser.role === "supplier") return <Navigate to="/supplier-dashboard" replace />;
     return <Navigate to="/user-dashboard" replace />;
   }
 
@@ -82,7 +93,7 @@ export default function LandingPage() {
           <h2>Continuous Operational Integrity</h2>
           <p>
             By integrating deterministic business rules with state-of-the-art LLM reasoning,
-            the Control Tower keeps lines running with up to $50,000 autonomous approval limit.
+            the Control Tower keeps lines running with up to ₹50,000 autonomous approval limit.
           </p>
         </div>
       </section>
