@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 const WAREHOUSE_DATA = {
   western: {
@@ -32,7 +32,34 @@ const WAREHOUSE_DATA = {
 
 export default function WarehousePieChart() {
   const [selectedKey, setSelectedKey] = useState("central");
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  
+  const filterRef = useRef(null);
+  const optionsRef = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilterMenu(false);
+      if (optionsRef.current && !optionsRef.current.contains(e.target)) setShowOptionsMenu(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
   const current = WAREHOUSE_DATA[selectedKey];
+
+  const handleExportCsv = () => {
+    const csvContent = "data:text/csv;charset=utf-8,Facility,Share,Capacity Usage,Active Shipments,Status\n" +
+      Object.values(WAREHOUSE_DATA).map(w => `${w.name},${w.share},${w.utilization},${w.activeShipments},${w.status}`).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "warehouse-pie-breakdown.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="dashboard-card" style={{ position: "relative" }}>
@@ -44,17 +71,114 @@ export default function WarehousePieChart() {
             (Click legend or slice)
           </span>
         </div>
-        <div className="card-header-actions">
-          <button
-            className="action-icon-btn"
-            title="Reset view"
-            onClick={() => setSelectedKey("central")}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M23 4v6h-6M1 20v-6h6"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-          </button>
+        <div className="card-header-actions" style={{ display: "flex", gap: 6, position: "relative" }}>
+          
+          {/* ── Filter Funnel Button ── */}
+          <div ref={filterRef} style={{ position: "relative" }}>
+            <button
+              className="action-icon-btn"
+              title="Filter Facility"
+              onClick={() => { setShowFilterMenu((v) => !v); setShowOptionsMenu(false); }}
+              style={{
+                background: showFilterMenu ? "var(--bg-panel-raised)" : "#FFFFFF",
+                borderColor: showFilterMenu ? "var(--primary)" : "var(--border-subtle)",
+                color: showFilterMenu ? "var(--primary)" : "var(--text-secondary)",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+            </button>
+
+            {showFilterMenu && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 8px)", right: 0,
+                width: 190, background: "#FFFFFF", borderRadius: 14,
+                border: "1px solid var(--border-subtle)", boxShadow: "0 14px 40px rgba(15,23,42,0.15)",
+                zIndex: 1000, padding: 6, fontSize: 12,
+              }}>
+                <div style={{ fontWeight: 700, padding: "6px 10px 4px", color: "var(--text-muted)", textTransform: "uppercase", fontSize: 10 }}>
+                  Select Facility
+                </div>
+                {[
+                  { key: "western", label: "Western Hub (25%)", color: "#00C6FF" },
+                  { key: "central", label: "Central Logistics (55%)", color: "#2563EB" },
+                  { key: "reserve", label: "Reserve Facility (20%)", color: "#F59E0B" },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    onClick={() => { setSelectedKey(item.key); setShowFilterMenu(false); }}
+                    style={{
+                      width: "100%", display: "flex", alignItems: "center", gap: 8,
+                      padding: "8px 10px", borderRadius: 8, border: "none",
+                      background: selectedKey === item.key ? "rgba(37,99,235,0.08)" : "none",
+                      cursor: "pointer", fontSize: 12, color: selectedKey === item.key ? "var(--primary)" : "var(--text-primary)",
+                      fontWeight: selectedKey === item.key ? 700 : 500, textAlign: "left",
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color }} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── 3-Dot Options Button ── */}
+          <div ref={optionsRef} style={{ position: "relative" }}>
+            <button
+              className="action-icon-btn"
+              title="More Options"
+              onClick={() => { setShowOptionsMenu((v) => !v); setShowFilterMenu(false); }}
+              style={{
+                background: showOptionsMenu ? "var(--bg-panel-raised)" : "#FFFFFF",
+                borderColor: showOptionsMenu ? "var(--primary)" : "var(--border-subtle)",
+                color: showOptionsMenu ? "var(--primary)" : "var(--text-secondary)",
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="2"/>
+                <circle cx="12" cy="12" r="2"/>
+                <circle cx="19" cy="12" r="2"/>
+              </svg>
+            </button>
+
+            {showOptionsMenu && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 8px)", right: 0,
+                width: 180, background: "#FFFFFF", borderRadius: 14,
+                border: "1px solid var(--border-subtle)", boxShadow: "0 14px 40px rgba(15,23,42,0.15)",
+                zIndex: 1000, padding: 6, fontSize: 12,
+              }}>
+                <button
+                  onClick={() => { handleExportCsv(); setShowOptionsMenu(false); }}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 10px", borderRadius: 8, border: "none", background: "none",
+                    cursor: "pointer", fontSize: 12, color: "var(--text-primary)", textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#F1F5F9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <span>📥</span> Export CSV Data
+                </button>
+
+                <button
+                  onClick={() => { setSelectedKey("central"); setShowOptionsMenu(false); }}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 8,
+                    padding: "8px 10px", borderRadius: 8, border: "none", background: "none",
+                    cursor: "pointer", fontSize: 12, color: "var(--text-primary)", textAlign: "left",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#F1F5F9")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                >
+                  <span>🔄</span> Reset to Default
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
 
