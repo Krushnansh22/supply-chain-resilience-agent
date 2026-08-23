@@ -1,25 +1,48 @@
 /**
  * src/api/client.js
- * Owner: Developer 4 (Frontend)
- *
- * Single fetch wrapper every other file in src/api/ uses. Keeps base URL,
- * error handling, and JSON parsing in one place.
- *
- * RECEIVES: VITE_API_BASE_URL from frontend/.env
- * DELIVERS: parsed JSON (or throws) to the individual api/*.js modules
+ * Single fetch wrapper that automatically attaches Authorization Bearer tokens,
+ * X-User-Id, and X-Warehouse-Id headers, and manages 401 session expiry.
  */
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export async function apiRequest(path, options = {}) {
+  const token = localStorage.getItem("scda_auth_token");
+  const userId = localStorage.getItem("scda_user_id");
+  const warehouseId = localStorage.getItem("scda_warehouse_id");
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+    ...(userId ? { "X-User-Id": userId } : {}),
+    ...(warehouseId ? { "X-Warehouse-Id": warehouseId } : {}),
+    ...(options.headers || {}),
+  };
+
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers,
   });
+
+  if (res.status === 401 && !path.startsWith("/auth/login") && !path.startsWith("/auth/demo-users")) {
+    localStorage.removeItem("scda_auth_token");
+    localStorage.removeItem("scda_active_user");
+    window.dispatchEvent(new CustomEvent("scda_auth_expired"));
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`API ${options.method || "GET"} ${path} failed: ${res.status} ${body}`);
+    let errorDetail = body;
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed.detail) errorDetail = parsed.detail;
+    } catch {
+      // keep raw body
+    }
+    throw new Error(errorDetail || `API ${options.method || "GET"} ${path} failed: ${res.status}`);
   }
 
   if (res.status === 204) return null;

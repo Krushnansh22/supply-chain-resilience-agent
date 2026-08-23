@@ -17,6 +17,9 @@ from app.decision_engine.inventory_calc import compute_days_of_supply
 from app.middleware.security import require_api_key
 from app.middleware.rate_limiter import check_rate_limit
 
+from app.middleware.rbac import get_current_user_and_scope
+from typing import Dict, Any
+
 router = APIRouter()
 
 # Only alphanumerics and hyphens — blocks path traversal, null bytes, SQL injection.
@@ -24,10 +27,16 @@ _ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
 @router.get("/", response_model=list[InventoryOut])
-def list_inventory(db: Database = Depends(get_mongo_db)):
-    """GET /inventory -> all components with computed days_of_supply."""
+def list_inventory(
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    """GET /inventory -> all components with computed days_of_supply, filtered by effective warehouse."""
     repo = InventoryRepository(db)
     rows = repo.list_all()
+    eff_warehouse = context.get("effective_warehouse")
+    if eff_warehouse:
+        rows = [r for r in rows if r.get("location") == eff_warehouse]
     out = []
     for r in rows:
         item = InventoryOut(**r)
@@ -75,6 +84,7 @@ def adjust_inventory(
     req: AdjustRequest = ...,
     db: Database = Depends(get_mongo_db),
     _auth: None = Depends(require_api_key),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
 ):
     """
     POST /inventory/{component_id}/adjust
@@ -86,6 +96,13 @@ def adjust_inventory(
     row = repo.get_by_component_id(component_id)
     if not row:
         raise HTTPException(status_code=404, detail="component not found")
+
+    eff_warehouse = context.get("effective_warehouse")
+    if context.get("role") == "WAREHOUSE_MANAGER" and eff_warehouse and row.get("location") != eff_warehouse:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Forbidden: You are manager of '{eff_warehouse}' and cannot adjust inventory at '{row.get('location')}'."
+        )
 
     new_stock = row["usable_stock"] + req.delta
     if new_stock < 0:

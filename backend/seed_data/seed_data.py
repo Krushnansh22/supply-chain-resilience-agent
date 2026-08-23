@@ -1005,8 +1005,76 @@ def run(db: Database) -> None:
             "correlation_id": "CORR-AGT-002",
         },
     ]
-    for log in erp_logs:
-        db["erp_logs"].update_one({"log_id": log["log_id"]}, {"$set": log}, upsert=True)
+    # 10. USERS (RBAC Accounts)
+    # ------------------------------------------------------------------
+    from app.core.security import hash_password
+    default_pwd_hash = hash_password("Admin@1234")
+
+    users = [
+        {
+            "user_id": "USR-ADMIN",
+            "email": "alex.whitfield@atlas-scm.io",
+            "name": "Alex Whitfield",
+            "role": "ADMIN",
+            "title": "Global Supply Chain Director",
+            "assigned_warehouse": "ALL",
+            "password_hash": default_pwd_hash,
+            "created_at": NOW.isoformat(),
+        },
+        {
+            "user_id": "USR-MGR-A",
+            "email": "marcus.vance@atlas-scm.io",
+            "name": "Marcus Vance",
+            "role": "WAREHOUSE_MANAGER",
+            "title": "Warehouse-A Operations Manager",
+            "assigned_warehouse": "Warehouse-A",
+            "password_hash": default_pwd_hash,
+            "created_at": NOW.isoformat(),
+        },
+        {
+            "user_id": "USR-MGR-B",
+            "email": "elena.rostova@atlas-scm.io",
+            "name": "Elena Rostova",
+            "role": "WAREHOUSE_MANAGER",
+            "title": "Warehouse-B Operations Manager",
+            "assigned_warehouse": "Warehouse-B",
+            "password_hash": default_pwd_hash,
+            "created_at": NOW.isoformat(),
+        },
+        {
+            "user_id": "USR-MGR-C",
+            "email": "chen.wei@atlas-scm.io",
+            "name": "Chen Wei",
+            "role": "WAREHOUSE_MANAGER",
+            "title": "Warehouse-C Operations Manager",
+            "assigned_warehouse": "Warehouse-C",
+            "password_hash": default_pwd_hash,
+            "created_at": NOW.isoformat(),
+        },
+        {
+            "user_id": "USR-MGR-D",
+            "email": "sarah.jenkins@atlas-scm.io",
+            "name": "Sarah Jenkins",
+            "role": "WAREHOUSE_MANAGER",
+            "title": "Warehouse-D Operations Manager",
+            "assigned_warehouse": "Warehouse-D",
+            "password_hash": default_pwd_hash,
+            "created_at": NOW.isoformat(),
+        },
+    ]
+    for u in users:
+        db["users"].update_one({"user_id": u["user_id"]}, {"$set": u}, upsert=True)
+
+    # 11. WAREHOUSES
+    # ------------------------------------------------------------------
+    warehouses = [
+        {"warehouse_id": "Warehouse-A", "name": "Warehouse-A (Main Assembly)", "region": "North America", "facility_type": "Primary Manufacturing", "capacity_utilization": 82},
+        {"warehouse_id": "Warehouse-B", "name": "Warehouse-B (Sub-Assembly Depot)", "region": "Central Hub", "facility_type": "Sub-Assembly Logistics", "capacity_utilization": 74},
+        {"warehouse_id": "Warehouse-C", "name": "Warehouse-C (Silicon Logistics)", "region": "Asia-Pacific", "facility_type": "Semiconductor Depot", "capacity_utilization": 89},
+        {"warehouse_id": "Warehouse-D", "name": "Warehouse-D (Packaging & Distribution)", "region": "Europe Gateway", "facility_type": "Outbound Distribution", "capacity_utilization": 65},
+    ]
+    for w in warehouses:
+        db["warehouses"].update_one({"warehouse_id": w["warehouse_id"]}, {"$set": w}, upsert=True)
 
     print("✅ Database seeded with comprehensive data successfully.")
     print(f"   Inventory:         {len(inventory_data)} items")
@@ -1018,3 +1086,5 @@ def run(db: Database) -> None:
     print(f"   Recovery Plans:    {len(recovery_plans)} plans")
     print(f"   Audit Logs:        {len(audit_logs)} entries (pre-seeded)")
     print(f"   ERP Logs:          {len(erp_logs)} entries (pre-seeded)")
+    print(f"   Users (RBAC):      {len(users)} users")
+    print(f"   Warehouses:        {len(warehouses)} facilities")

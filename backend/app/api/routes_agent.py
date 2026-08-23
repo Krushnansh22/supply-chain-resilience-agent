@@ -19,7 +19,7 @@ ENDPOINTS:
 from fastapi import APIRouter, Depends, Path, Request
 from pydantic import BaseModel, ConfigDict, field_validator, Field
 from datetime import datetime, timezone
-from typing import Optional, Any
+from typing import Optional, Any, Dict, List
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -389,3 +389,104 @@ def reject_plan(
         "incident_id": decision.incident_id,
         "state": AgentState.REPLANNING.value,
     }
+
+
+# ─── AGENT LIFECYCLE & SEQUENTIAL CONTROLLER ENDPOINTS (WITH RBAC) ───
+
+from app.agent.agent_service import agent_service
+from app.middleware.rbac import get_current_user_and_scope
+
+
+class StockCorrectionRequest(BaseModel):
+    incident_id: str
+    component_id: str
+    corrected_stock: int
+    reason: str
+    approver: str = "Operator"
+
+
+@router.get("/status")
+def get_agent_status_endpoint(
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    """GET /agent/status -> returns state, message, step, queue, and metrics."""
+    return agent_service.get_status(db)
+
+
+@router.post("/start")
+def start_agent_endpoint(
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    """POST /agent/start -> starts the autonomous loop and triggers an initial environment scan."""
+    return agent_service.start_agent(db)
+
+
+@router.post("/stop")
+def stop_agent_endpoint(
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    """POST /agent/stop -> stops the autonomous agent worker."""
+    return agent_service.stop_agent()
+
+
+@router.post("/scan")
+def scan_environment_endpoint(
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    """POST /agent/scan -> triggers an immediate scan of the database environment."""
+    anomalies = agent_service.scan_environment(db)
+    return {
+        "scanned": True,
+        "anomalies_found": len(anomalies),
+        "queue_length": len(agent_service.queue),
+        "anomalies": anomalies,
+    }
+
+
+@router.post("/step")
+def step_agent_endpoint(
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    """POST /agent/step -> executes one step of the current incident."""
+    return agent_service.process_one_step(db)
+
+
+@router.post("/correct-stock")
+def correct_stock_endpoint(
+    req: StockCorrectionRequest,
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    """
+    POST /agent/correct-stock
+    Allows human operator/manager to input verified physical stock count for negative/missing stock incidents.
+    Guarded by RBAC: Warehouse Manager can only correct stock in their assigned warehouse.
+    """
+    # Verify warehouse ownership
+    inv = db["inventory"].find_one({"component_id": req.component_id})
+    if inv:
+        comp_loc = inv.get("location")
+        eff_warehouse = context.get("effective_warehouse")
+        if context.get("role") == "WAREHOUSE_MANAGER" and eff_warehouse and comp_loc != eff_warehouse:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Forbidden: You are manager of '{eff_warehouse}' and cannot correct stock for component located at '{comp_loc}'."
+            )
+
+    approver_name = context.get("user", {}).get("name") or req.approver
+    res = agent_service.resolve_stock_correction(
+        incident_id=req.incident_id,
+        component_id=req.component_id,
+        corrected_stock=req.corrected_stock,
+        reason=req.reason,
+        approver=approver_name,
+        db=db,
+    )
+    if "error" in res:
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
+

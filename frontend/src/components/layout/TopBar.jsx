@@ -1,58 +1,50 @@
 /**
  * src/components/layout/TopBar.jsx
- * Owner: Developer 4 (Frontend)
- * Header with Global Autonomous Agent Controller and Environment Scanner.
+ * Header with RBAC User Role Switcher, Multi-Warehouse Selector, and Health Indicator.
  */
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { apiRequest } from "../../api/client.js";
-import { processBacklog, scanAndTriage, getSystemStatus } from "../../api/agent.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function TopBar() {
-  const [online, setOnline] = useState(null);
-  const [running, setRunning] = useState(false);
-  const [feedback, setFeedback] = useState(null);
-  const [systemStatus, setSystemStatus] = useState(null);
+  const navigate = useNavigate();
+  const {
+    currentUser,
+    isAdmin,
+    isWarehouseManager,
+    activeWarehouse,
+    usersList,
+    warehousesList,
+    switchUser,
+    setWarehouse,
+    logout,
+  } = useAuth();
 
-  const fetchStatus = () => {
-    apiRequest("/health")
-      .then(() => {
-        setOnline(true);
-        getSystemStatus().then(setSystemStatus).catch(() => null);
-      })
-      .catch(() => setOnline(false));
-  };
+  const [online, setOnline] = useState(null);
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 4000);
+    const check = () =>
+      apiRequest("/health")
+        .then(() => setOnline(true))
+        .catch(() => setOnline(false));
+    check();
+    const interval = setInterval(check, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleStartAgent = async () => {
-    setRunning(true);
-    setFeedback(null);
-    try {
-      // Run the global autonomous agent queue processor
-      const res = await processBacklog();
-      setFeedback(res.message || "Agent operations completed.");
-      fetchStatus();
-      setTimeout(() => setFeedback(null), 7000);
-    } catch (err) {
-      console.error("Agent execution error:", err);
-      setFeedback("Failed to complete agent cycle.");
-      setTimeout(() => setFeedback(null), 5000);
-    } finally {
-      setRunning(false);
-    }
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
   };
 
   const statusColor = online === null ? "#667085" : online ? "#16A46B" : "#D94B5B";
   const statusLabel = online === null ? "CHECKING" : online ? "LIVE" : "OFFLINE";
 
   return (
-    <header className="header-top">
-      <div className="header-top-inner">
-        <div className="header-logo">
+    <header className="header-top" style={{ borderBottom: "1px solid var(--border-subtle, #1E293B)", padding: "10px 24px" }}>
+      <div className="header-top-inner" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div className="header-logo" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div
             className="mark"
             style={{
@@ -64,86 +56,130 @@ export default function TopBar() {
               alignItems: "center",
               justifyContent: "center",
               color: "#ffffff",
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 700,
             }}
-          />
+          >
+            SC
+          </div>
           <span
             className="name"
-            style={{ fontFamily: "Space Grotesk", fontSize: 13, fontWeight: 700, color: "#ffffff" }}
+            style={{ fontFamily: "Space Grotesk, sans-serif", fontSize: 13, fontWeight: 700, color: "#ffffff" }}
           >
-            Supply Chain Disruption Control Agent
+            Supply Chain Resilience Agent
           </span>
         </div>
-        <span
-          className="header-title"
-          style={{ fontFamily: "Space Grotesk", fontSize: 13, fontWeight: 600, color: "#ffffff" }}
-        >
-          HOP 2026 // Team TRACE
-        </span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {/* Global Autonomous Agent Controller Button */}
+      {/* ─── RBAC & WAREHOUSE CONTEXT CONTROLS ─── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginLeft: "auto" }}>
+        
+        {/* 1. Warehouse Selector / Lock Badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted, #94A3B8)", textTransform: "uppercase" }}>
+            Warehouse Scope:
+          </span>
+          {isAdmin ? (
+            <select
+              value={activeWarehouse}
+              onChange={(e) => setWarehouse(e.target.value)}
+              style={{
+                background: "rgba(35, 184, 201, 0.1)",
+                color: "#23B8C9",
+                border: "1px solid rgba(35, 184, 201, 0.4)",
+                padding: "5px 10px",
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              <option value="ALL" style={{ background: "#0F172A", color: "#fff" }}>🌐 All Warehouses (Global View)</option>
+              {warehousesList.map((wh) => (
+                <option key={wh.warehouse_id} value={wh.warehouse_id} style={{ background: "#0F172A", color: "#fff" }}>
+                  📍 {wh.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                background: "rgba(245, 158, 11, 0.12)",
+                color: "#F59E0B",
+                border: "1px solid rgba(245, 158, 11, 0.35)",
+                padding: "4px 10px",
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+              title="Your user account is restricted to your assigned warehouse facility."
+            >
+              <span>🔒</span>
+              <span>{activeWarehouse} (Assigned)</span>
+            </div>
+          )}
+        </div>
+
+        {/* 2. User & Role Switcher */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, borderLeft: "1px solid rgba(255,255,255,0.1)", paddingLeft: 14 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted, #94A3B8)", textTransform: "uppercase" }}>
+            User Role:
+          </span>
+          <select
+            value={currentUser?.user_id || ""}
+            onChange={(e) => switchUser(e.target.value)}
+            style={{
+              background: "rgba(255, 255, 255, 0.05)",
+              color: "#FFFFFF",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              padding: "5px 10px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {usersList.map((u) => (
+              <option key={u.user_id} value={u.user_id} style={{ background: "#0F172A", color: "#fff" }}>
+                {u.role === "ADMIN" ? "👑" : "🏭"} {u.name} ({u.role.replace("_", " ")})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 3. Auth Logout / Portal Link */}
         <button
-          onClick={handleStartAgent}
-          disabled={running}
+          type="button"
+          onClick={handleLogout}
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: running ? "rgba(35, 184, 201, 0.25)" : "linear-gradient(135deg, #073F46, #07535A)",
-            border: "1px solid rgba(35, 184, 201, 0.5)",
-            color: "#23B8C9",
-            padding: "6px 14px",
+            background: "rgba(239, 68, 68, 0.1)",
+            color: "#EF4444",
+            border: "1px solid rgba(239, 68, 68, 0.3)",
+            padding: "5px 10px",
             borderRadius: 6,
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 600,
-            cursor: running ? "not-allowed" : "pointer",
-            fontFamily: "Space Grotesk",
-            transition: "all 0.15s ease",
-            boxShadow: running ? "0 0 12px rgba(35, 184, 201, 0.4)" : "none",
+            cursor: "pointer",
           }}
+          title="Sign out or switch portal accounts"
         >
-          <span style={{ fontSize: 13 }}>{running ? "⚙️" : "⚡"}</span>
-          {running ? "Agent Processing Queue…" : "Start Autonomous Agent"}
+          Sign Out
         </button>
 
-        {/* Backend & Agent Status Indicator */}
-        <div className="header-status" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span className="status-dot-sm" style={{ background: running ? "#23B8C9" : statusColor, width: 6, height: 6, borderRadius: "50%" }} />
+        {/* 4. System Health Beacon */}
+        <div className="header-status" style={{ display: "flex", alignItems: "center", gap: 6, borderLeft: "1px solid rgba(255,255,255,0.1)", paddingLeft: 14 }}>
+          <span className="status-dot-sm" style={{ background: statusColor, width: 6, height: 6, borderRadius: "50%" }} />
           <span
             className="status-text"
-            style={{ fontFamily: "JetBrains Mono", fontSize: 10, color: running ? "#23B8C9" : statusColor, letterSpacing: "0.05em" }}
+            style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 10, color: statusColor, letterSpacing: "0.05em" }}
           >
-            {running ? "PROCESSING" : statusLabel}
+            {statusLabel}
           </span>
         </div>
       </div>
-
-      {feedback && (
-        <div
-          style={{
-            position: "fixed",
-            top: 60,
-            right: 24,
-            zIndex: 9999,
-            background: "#073F46",
-            border: "1px solid #23B8C9",
-            color: "#ffffff",
-            padding: "10px 16px",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
-            fontSize: 12.5,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          <span>🎯</span>
-          <span>{feedback}</span>
-        </div>
-      )}
     </header>
   );
 }

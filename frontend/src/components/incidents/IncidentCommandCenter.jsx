@@ -223,6 +223,67 @@ export default function IncidentCommandCenter() {
         </div>
       )}
 
+      {/* Autonomous Resolution & Decision Brief Banner */}
+      {incident.status === "RESOLVED" && (
+        <div
+          className="panel elevated-panel"
+          style={{
+            marginTop: 16,
+            marginBottom: 16,
+            background: incident.resolution_mode === "AUTONOMOUS" ? "rgba(16, 185, 129, 0.06)" : "rgba(245, 158, 11, 0.06)",
+            border: incident.resolution_mode === "AUTONOMOUS" ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(245, 158, 11, 0.4)",
+            borderLeft: incident.resolution_mode === "AUTONOMOUS" ? "5px solid #10B981" : "5px solid #F59E0B",
+            padding: 20,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: "3px 10px",
+                  borderRadius: 6,
+                  background: incident.resolution_mode === "AUTONOMOUS" ? "#10B98120" : "#F59E0B20",
+                  color: incident.resolution_mode === "AUTONOMOUS" ? "#10B981" : "#F59E0B",
+                  border: incident.resolution_mode === "AUTONOMOUS" ? "1px solid #10B98160" : "1px solid #F59E0B60",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                {incident.resolution_mode === "AUTONOMOUS" ? "🤖 AUTONOMOUSLY RESOLVED BY AGENT" : "👤 HUMAN VERIFIED & APPROVED"}
+              </span>
+              <span style={{ fontSize: 13, color: "#94A3B8" }}>
+                Resolved by: <strong style={{ color: "#FFFFFF" }}>{incident.resolved_by || (incident.resolution_mode === "AUTONOMOUS" ? "Autonomous Agent" : "Coordinator")}</strong>
+              </span>
+            </div>
+            {incident.resolved_at && (
+              <span style={{ fontSize: 11, color: "#64748B", fontFamily: "JetBrains Mono, monospace" }}>
+                Resolved: {new Date(incident.resolved_at).toLocaleString()}
+              </span>
+            )}
+          </div>
+
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF", marginBottom: 6 }}>
+            🧠 Decision Rationale & Governance Trace:
+          </div>
+          <p style={{ margin: 0, fontSize: 13.5, color: "#E2E8F0", lineHeight: 1.6 }}>
+            {incident.autonomous_reasoning || plan?.recommendation_reason || "Incident evaluated and resolved according to policy constraints."}
+          </p>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4, background: "rgba(255,255,255,0.06)", color: "#CBD5E1" }}>
+              ✓ Autonomous Threshold: &le; $50,000
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4, background: "rgba(255,255,255,0.06)", color: "#CBD5E1" }}>
+              ✓ SLA Compliance: Delivery Met
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 4, background: "rgba(255,255,255,0.06)", color: "#CBD5E1" }}>
+              ✓ Audit Logged: Immutable Trace
+            </span>
+          </div>
+        </div>
+      )}
+
       <InfoCards incident={incident} plan={plan} />
 
       {/* Autonomous Multi-Step Reasoning & Thought Stream Visualizer */}

@@ -19,8 +19,10 @@ import { scanAndTriage, processBacklog } from "../../api/agent.js";
 import KpiCards from "./KpiCards.jsx";
 import ActiveIncidentsList from "./ActiveIncidentsList.jsx";
 import AgentActivityFeed from "./AgentActivityFeed.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function OverviewDashboard() {
+  const { activeWarehouse, currentUser } = useAuth();
   const [incidents, setIncidents] = useState([]);
   const [productionOrders, setProductionOrders] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -32,10 +34,10 @@ export default function OverviewDashboard() {
   const load = useCallback(() => {
     Promise.all([listIncidents(), listAuditLogs(), listProductionOrders(), listSuppliers()])
       .then(([incidentsRes, auditRes, productionRes, suppliersRes]) => {
-        setIncidents(incidentsRes);
-        setAuditLogs(auditRes);
-        setProductionOrders(productionRes);
-        setSuppliers(suppliersRes);
+        setIncidents(incidentsRes || []);
+        setAuditLogs(auditRes || []);
+        setProductionOrders(productionRes || []);
+        setSuppliers(suppliersRes || []);
       })
       .catch((err) => console.error("Overview load failed:", err))
       .finally(() => setLoading(false));
@@ -43,9 +45,22 @@ export default function OverviewDashboard() {
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 2500);
-    return () => clearInterval(interval);
-  }, [load]);
+    const handleLiveUpdate = () => {
+      load();
+    };
+    window.addEventListener("scda_agent_activity_updated", handleLiveUpdate);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        load();
+      }
+    }, 2500);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("scda_agent_activity_updated", handleLiveUpdate);
+    };
+  }, [load, activeWarehouse, currentUser]);
 
   const handleStartAgentLoop = async () => {
     setAgentRunning(true);

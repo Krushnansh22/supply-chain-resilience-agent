@@ -33,6 +33,10 @@ ACTIVE_STATUSES = [
 ]
 
 
+from app.middleware.rbac import get_current_user_and_scope
+from typing import Dict, Any
+
+
 def get_repo(db: Database = Depends(get_mongo_db)):
     return IncidentRepository(db)
 
@@ -41,8 +45,9 @@ def get_repo(db: Database = Depends(get_mongo_db)):
 def list_incidents(
     category: str = Query("all", pattern="^(operational|diagnostic|all)$"),
     db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
 ):
-    """List operational incidents by default; diagnostics remain queryable separately."""
+    """List operational incidents scoped by effective warehouse."""
     query = {}
     if category == "operational":
         query = {"type": {"$ne": "DATA_INCONSISTENCY"}, "status": {"$in": ACTIVE_STATUSES}}
@@ -50,6 +55,17 @@ def list_incidents(
         query["type"] = "DATA_INCONSISTENCY"
     elif category == "all":
         query["type"] = {"$ne": "DATA_INCONSISTENCY"}
+
+    eff_warehouse = context.get("effective_warehouse")
+    if eff_warehouse:
+        # Find components belonging to this warehouse
+        comp_ids = [c["component_id"] for c in db["inventory"].find({"location": eff_warehouse}, {"component_id": 1})]
+        query["$or"] = [
+            {"affected_component": {"$in": comp_ids}},
+            {"location": eff_warehouse},
+            {"warehouse_id": eff_warehouse},
+        ]
+
     return list(db["incidents"].find(query, {"_id": 0}).sort("created_at", -1))
 
 
@@ -57,10 +73,23 @@ def list_incidents(
 def get_incident(
     incident_id: str = Path(..., pattern=_INCIDENT_ID_PATTERN, min_length=1, max_length=32),
     repo: IncidentRepository = Depends(get_repo),
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
 ):
     row = repo.get_by_incident_id(incident_id)
     if not row:
         raise HTTPException(status_code=404, detail="incident not found")
+
+    eff_warehouse = context.get("effective_warehouse")
+    if context.get("role") == "WAREHOUSE_MANAGER" and eff_warehouse:
+        aff_comp = row.get("affected_component")
+        if aff_comp:
+            inv = db["inventory"].find_one({"component_id": aff_comp})
+            if inv and inv.get("location") != eff_warehouse:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Forbidden: You are manager of '{eff_warehouse}' and cannot view incidents for component at '{inv.get('location')}'."
+                )
     return row
 
 

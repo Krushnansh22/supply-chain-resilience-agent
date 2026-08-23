@@ -54,6 +54,8 @@ from app.api import (
     routes_agent,
     routes_simulator,
     routes_integrations,
+    routes_users,
+    routes_auth,
 )
 from app.routers import config as config_router
 
@@ -96,13 +98,13 @@ app.add_middleware(SecurityHeadersMiddleware)
 # ── Layer 4: Security event logger (4xx / 5xx monitoring) ────────────────────
 app.add_middleware(SecurityEventLoggerMiddleware)
 
-# ── Layer 5: CORS — restricted to known origins and explicit HTTP methods ─────
+# ── Layer 5: CORS — allow cross-origin requests from frontend with full custom headers ─────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=settings.cors_allowed_methods_list,   # GET, POST, OPTIONS
-    allow_headers=["Content-Type", "Accept", "X-API-Key"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -149,6 +151,8 @@ app.include_router(routes_incidents.router, prefix="/incidents", tags=["Incident
 app.include_router(routes_audit.router, prefix="/audit", tags=["Audit"])
 app.include_router(routes_agent.router, prefix="/agent", tags=["Agent"])
 app.include_router(routes_simulator.router, prefix="/simulator", tags=["Simulator"])
+app.include_router(routes_users.router, tags=["Users & RBAC"])
+app.include_router(routes_auth.router, tags=["Authentication"])
 # --- n8n integration layer (called by n8n workflow, not frontend) ---
 app.include_router(routes_integrations.router, prefix="/integrations", tags=["N8N Integrations"])
 # --- Config endpoint: serves runtime config to n8n at incident lifecycle start ---

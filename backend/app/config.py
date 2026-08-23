@@ -57,12 +57,16 @@ class Settings(BaseSettings):
 
     # ── CORS ───────────────────────────────────────────────────────────────────
     CORS_ORIGINS: str = "http://localhost:5173"
-    CORS_ALLOWED_METHODS: str = "GET,POST,OPTIONS"
+    CORS_ALLOWED_METHODS: str = "GET,POST,PUT,DELETE,OPTIONS"
 
     # ── Security ───────────────────────────────────────────────────────────────
     # Legacy API_KEY: used as fallback by routes_integrations.verify_api_key.
     # Prefer BACKEND_API_KEY for all new endpoints.
     API_KEY: str = ""
+
+    # ── JWT Authentication ─────────────────────────────────────────────────────
+    JWT_SECRET: str = "supply-chain-jwt-secret-change-in-production-abc123xyz"
+    JWT_EXPIRE_MINUTES: int = 1440  # 24 hours
 
     # Controls whether Swagger UI (/docs) and /openapi.json are publicly accessible.
     DOCS_ENABLED: bool = True
@@ -70,7 +74,7 @@ class Settings(BaseSettings):
     # ── Rate Limiting & Proxy ──────────────────────────────────────────────────
     # Comma-separated trusted reverse-proxy IPs (X-Forwarded-For ignored otherwise).
     TRUSTED_PROXY_IPS: str = ""
-    GENERAL_RATE_LIMIT_MAX: int = 60
+    GENERAL_RATE_LIMIT_MAX: int = 1000
     GENERAL_RATE_LIMIT_WINDOW: int = 60
 
     # ── Misc ───────────────────────────────────────────────────────────────────

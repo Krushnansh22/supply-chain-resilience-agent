@@ -11,24 +11,32 @@ import { listIncidents } from "../../api/incidents.js";
 import { listProductionOrders } from "../../api/production.js";
 import SeverityBadge from "../common/SeverityBadge.jsx";
 import StatusBadge from "../common/StatusBadge.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
 
 export default function IncidentsListPage() {
+  const { activeWarehouse, currentUser } = useAuth();
   const [incidents, setIncidents] = useState([]);
   const [productions, setProductions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [severityFilter, setSeverityFilter] = useState("ALL");
 
-  useEffect(() => {
+  const load = () => {
     Promise.all([listIncidents("all"), listProductionOrders()])
       .then(([incidentsRes, productionsRes]) => {
-        setIncidents(incidentsRes);
-        setProductions(productionsRes);
+        setIncidents(incidentsRes || []);
+        setProductions(productionsRes || []);
       })
       .catch((err) => console.error("Incidents list load failed:", err))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 3500);
+    return () => clearInterval(interval);
+  }, [activeWarehouse, currentUser]);
 
   const productionByComponent = useMemo(() => {
     const map = {};
@@ -113,7 +121,47 @@ export default function IncidentsListPage() {
                             </div>
                           ))}
                     </td>
-                    <td><StatusBadge status={incident.status} /></td>
+                    <td>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <StatusBadge status={incident.status} />
+                        {incident.status === "RESOLVED" && incident.resolution_mode === "AUTONOMOUS" && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              background: "rgba(16, 185, 129, 0.15)",
+                              color: "#10B981",
+                              border: "1px solid rgba(16, 185, 129, 0.35)",
+                              display: "inline-block",
+                              width: "fit-content",
+                            }}
+                            title={incident.autonomous_reasoning || "Resolved automatically within $50,000 threshold"}
+                          >
+                            🤖 Autonomous
+                          </span>
+                        )}
+                        {incident.status === "RESOLVED" && incident.resolution_mode === "HUMAN_APPROVED" && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              background: "rgba(245, 158, 11, 0.15)",
+                              color: "#F59E0B",
+                              border: "1px solid rgba(245, 158, 11, 0.35)",
+                              display: "inline-block",
+                              width: "fit-content",
+                            }}
+                            title={incident.autonomous_reasoning || "Approved by coordinator"}
+                          >
+                            👤 Human Sign-off
+                          </span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}

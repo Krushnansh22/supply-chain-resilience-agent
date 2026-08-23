@@ -15,13 +15,26 @@ router = APIRouter()
 _PRODUCTION_ID_PATTERN = r"^[A-Za-z0-9_-]+$"
 
 
+from app.middleware.rbac import get_current_user_and_scope
+from typing import Dict, Any
+
+
 def get_repo(db: Database = Depends(get_mongo_db)):
     return ProductionOrderRepository(db)
 
 
 @router.get("/", response_model=list[ProductionOrderOut])
-def list_production_orders(repo: ProductionOrderRepository = Depends(get_repo)):
-    return repo.list_all()
+def list_production_orders(
+    repo: ProductionOrderRepository = Depends(get_repo),
+    db: Database = Depends(get_mongo_db),
+    context: Dict[str, Any] = Depends(get_current_user_and_scope),
+):
+    rows = repo.list_all()
+    eff_warehouse = context.get("effective_warehouse")
+    if eff_warehouse:
+        comp_ids = {c["component_id"] for c in db["inventory"].find({"location": eff_warehouse}, {"component_id": 1})}
+        rows = [r for r in rows if r.get("component_id") in comp_ids or r.get("plant_location") == eff_warehouse]
+    return rows
 
 
 @router.get("/{production_id}", response_model=ProductionOrderOut)

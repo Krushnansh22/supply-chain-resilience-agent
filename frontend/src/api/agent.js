@@ -5,6 +5,19 @@
  */
 import { apiRequest } from "./client.js";
 
+// Autonomous Agent Lifecycle Controls
+export const startAgent = () => apiRequest("/agent/start", { method: "POST" });
+export const stopAgent = () => apiRequest("/agent/stop", { method: "POST" });
+export const getAgentStatus = () => apiRequest("/agent/status");
+export const scanEnvironment = () => apiRequest("/agent/scan", { method: "POST" });
+export const stepAgent = () => apiRequest("/agent/step", { method: "POST" });
+
+export const correctStock = ({ incident_id, component_id, corrected_stock, reason, approver }) =>
+  apiRequest("/agent/correct-stock", {
+    method: "POST",
+    body: JSON.stringify({ incident_id, component_id, corrected_stock, reason, approver }),
+  });
+
 export const scanAndTriage = () =>
   apiRequest("/agent/scan-and-triage", { method: "POST" });
 

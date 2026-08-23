@@ -6,14 +6,16 @@ import { useEffect, useState } from "react";
 import { listIncidents } from "../../api/incidents.js";
 import { getAgentPlan } from "../../api/agent.js";
 import ApprovalCard from "./ApprovalCard.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function ApprovalsPage() {
+  const { activeWarehouse, currentUser } = useAuth();
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = () => {
     setLoading(true);
-    listIncidents("operational")
+    listIncidents("all")
       .then(async (incidents) => {
         // Filter only WAITING_APPROVAL or DATA_INCONSISTENCY incidents
         const waiting = (incidents || []).filter(
@@ -44,7 +46,9 @@ export default function ApprovalsPage() {
 
   useEffect(() => {
     load();
-  }, []);
+    const interval = setInterval(load, 3500);
+    return () => clearInterval(interval);
+  }, [activeWarehouse, currentUser]);
 
   if (loading) {
     return (

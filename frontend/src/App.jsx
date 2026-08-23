@@ -1,26 +1,15 @@
 /**
  * src/App.jsx
- * Owner: Developer 4 (Frontend)
- *
- * Top-level router + layout shell for the Control Tower (team doc Section 11).
- * Sidebar sections map 1:1 to backend routers:
- *   Overview -> /incidents + /audit (activity feed)
- *   Incidents (list) -> /incidents, /production (display join)
- *   Incidents (detail) -> /incidents/{id}, /agent/state/{id}, /agent/plan/{id}
- *   Approvals -> /incidents (filtered WAITING_APPROVAL) + /agent/plan/{id}
- *   Inventory -> /inventory
- *   Production -> /production
- *   Suppliers -> /suppliers
- *   Audit -> /audit
- *
- * RECEIVES: nothing (composition root)
- * DELIVERS: rendered app shell; individual pages own their own data fetching via src/api/*
+ * Top-level router with ProtectedRoute enforcement, AuthProvider, and Agent Control Ribbon.
  */
 
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import Sidebar from "./components/layout/Sidebar.jsx";
 import TopBar from "./components/layout/TopBar.jsx";
+import AgentControlRibbon from "./components/layout/AgentControlRibbon.jsx";
 
+import LoginPage from "./components/auth/LoginPage.jsx";
 import OverviewDashboard from "./components/overview/OverviewDashboard.jsx";
 import IncidentsListPage from "./components/incidents/IncidentsListPage.jsx";
 import IncidentCommandCenter from "./components/incidents/IncidentCommandCenter.jsx";
@@ -33,13 +22,25 @@ import DisruptionSimulatorPanel from "./components/simulator/DisruptionSimulator
 import DiagnosticsPage from "./components/diagnostics/DiagnosticsPage.jsx";
 import ReportsPage from "./components/reports/ReportsPage.jsx";
 
-export default function App() {
+function ProtectedRoute({ children }) {
+  const { currentUser, token } = useAuth();
+  const location = useLocation();
+
+  // If not authenticated, strictly redirect to /login
+  if (!currentUser && !token) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  return children;
+}
+
+function DashboardLayout() {
   return (
-    <BrowserRouter>
+    <ProtectedRoute>
       <div className="app-shell">
         <Sidebar />
         <div className="app-main">
           <TopBar />
+          <AgentControlRibbon />
           <div className="app-content">
             <Routes>
               <Route path="/" element={<OverviewDashboard />} />
@@ -54,10 +55,30 @@ export default function App() {
               <Route path="/diagnostics" element={<DiagnosticsPage />} />
               <Route path="/reports" element={<ReportsPage />} />
               <Route path="/simulator" element={<DisruptionSimulatorPanel />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </div>
       </div>
+    </ProtectedRoute>
+  );
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/*" element={<DashboardLayout />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   );
 }
