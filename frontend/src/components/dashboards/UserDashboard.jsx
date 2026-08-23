@@ -69,9 +69,9 @@ export default function UserDashboard() {
         marginBottom: "24px",
         boxShadow: "var(--shadow-card)"
       }}>
-        <h2 style={{ color: "#FFFFFF", fontSize: "22px", marginBottom: "8px" }}>Welcome Back, {user.name}</h2>
+        <h2 style={{ color: "#FFFFFF", fontSize: "22px", marginBottom: "8px" }}>Welcome Back, {user?.name || "Operations Lead"}</h2>
         <p style={{ color: "#8E9BAE", fontSize: "14px", margin: 0 }}>
-          Role: <span className="status-pill info" style={{ padding: "2px 8px" }}>Procurement User</span> · Email: {user.email}
+          Role: <span className="status-pill info" style={{ padding: "2px 8px" }}>Procurement User</span> · Email: {user?.email || "user@scda.io"}
         </p>
       </div>
 
