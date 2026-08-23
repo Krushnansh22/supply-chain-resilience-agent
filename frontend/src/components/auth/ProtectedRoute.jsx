@@ -12,7 +12,11 @@ import { useAuth } from "../../context/AuthContext.jsx";
 export default function ProtectedRoute({ children, allowedRoles }) {
   const { user, loading, isAuthenticated } = useAuth();
 
-  if (loading) {
+  // Only block on the loading spinner if we genuinely don't know the auth state yet
+  // (i.e. there's a token being validated but no user hydrated from localStorage).
+  // If user is already available (hydrated synchronously from localStorage), skip
+  // the spinner so navigation immediately after login works correctly.
+  if (loading && !user) {
     return (
       <div style={{
         display: "flex",

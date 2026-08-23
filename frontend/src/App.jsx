@@ -49,7 +49,7 @@ function DashboardHome() {
 }
 
 function AppRoutes() {
-  const { handleUnauthorized, loading } = useAuth();
+  const { handleUnauthorized, loading, user } = useAuth();
 
   // Listen to 401 unauthorized events from the api client
   useEffect(() => {
@@ -60,7 +60,10 @@ function AppRoutes() {
     return () => window.removeEventListener("scda_unauthorized", handleUnauth);
   }, [handleUnauthorized]);
 
-  if (loading) {
+  // Only show full-screen loader when the token is being validated server-side
+  // and there's no user yet. If user is hydrated from localStorage, render
+  // routes immediately so post-login navigation works without being blocked.
+  if (loading && !user) {
     return (
       <div style={{
         display: "flex",

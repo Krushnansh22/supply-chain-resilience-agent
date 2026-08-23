@@ -17,9 +17,19 @@ const TOKEN_KEY = "scda_auth_token";
 const USER_KEY = "scda_auth_user";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  // Initialize user synchronously from localStorage so ProtectedRoute
+  // sees the correct value immediately after navigate() on login — before
+  // React's async setUser state update would otherwise commit.
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem(USER_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY));
-  const [loading, setLoading] = useState(true); // true while restoring session
+  const [loading, setLoading] = useState(true); // true while validating token with backend
   const [authError, setAuthError] = useState(null);
 
   /** Persist auth state to localStorage */
