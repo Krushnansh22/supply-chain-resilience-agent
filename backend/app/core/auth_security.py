@@ -1,39 +1,18 @@
 """
 app/core/auth_security.py
 
-JWT token creation/validation and password hashing for user auth.
-Uses HS256 JWT (via PyJWT) and bcrypt directly (avoiding buggy passlib wrappers).
+JWT token creation/validation for user auth.
+Uses HS256 JWT (via PyJWT).
 
-Never stores plain passwords. Tokens are short-lived; no refresh tokens
+Tokens are short-lived; no refresh tokens
 in v1 to keep the implementation simple and auditable.
 """
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-import bcrypt
 
 from jose import JWTError, jwt
 from app.config import settings
-
-# ── Password helpers using bcrypt directly ────────────────────────────────────
-
-def hash_password(plain: str) -> str:
-    """Return bcrypt hash of the plain-text password."""
-    pw_bytes = plain.encode('utf-8')
-    salt = bcrypt.gensalt(rounds=12)
-    hashed = bcrypt.hashpw(pw_bytes, salt)
-    return hashed.decode('utf-8')
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    """Constant-time comparison of plain password against its hash."""
-    try:
-        pw_bytes = plain.encode('utf-8')
-        hash_bytes = hashed.encode('utf-8')
-        return bcrypt.checkpw(pw_bytes, hash_bytes)
-    except Exception:
-        return False
-
 
 # ── JWT helpers ───────────────────────────────────────────────────────────────
 

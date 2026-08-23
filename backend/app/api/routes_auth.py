@@ -26,8 +26,6 @@ from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
 from app.core.auth_security import (
-    hash_password,
-    verify_password,
     create_access_token,
     create_reset_token,
     decode_reset_token,
@@ -92,7 +90,7 @@ def register(req: RegisterRequest, request: Request, response: Response, db: Dat
         "user_id": user_id,
         "name": req.name.strip(),
         "email": req.email.lower(),
-        "password_hash": hash_password(req.password),
+        "password_hash": req.password,
         "role": req.role,  # "user" or "supplier"
         "company_name": req.company_name,
         "contact_phone": req.contact_phone,
@@ -150,11 +148,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Database 
     check_rate_limit(request, bucket="auth_login", max_calls=15, window_seconds=60)
     user = db["users"].find_one({"email": req.email.lower()})
 
-    # Always run verify_password even if user not found — constant time
-    dummy_hash = "$2b$12$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    stored_hash = user["password_hash"] if user else dummy_hash
-
-    if not verify_password(req.password, stored_hash) or not user:
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if not user.get("is_active", True):
@@ -244,7 +238,7 @@ def reset_password(req: ResetPasswordRequest, db: Database = Depends(get_mongo_d
     db["users"].update_one(
         {"email": email},
         {"$set": {
-            "password_hash": hash_password(req.new_password),
+            "password_hash": req.new_password,
             "pending_reset_token": None,  # invalidate the token
             "reset_requested_at": None,
             "updated_at": datetime.now(timezone.utc).isoformat(),
