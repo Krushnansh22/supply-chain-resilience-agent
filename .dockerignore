@@ -1,0 +1,13 @@
+.git
+.gitignore
+.pytest_cache
+node_modules
+**/__pycache__
+**/.pytest_cache
+**/node_modules
+**/dist
+**/*.pyc
+**/*.log
+.env
+.env.*
+!.env.example

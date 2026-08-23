@@ -1,32 +1,47 @@
 # ==============================================================================
 # docker-compose.yml
-# Supply Chain Resilience Agent — Multi-Service Orchestration
+# Supply Chain Resilience Agent — Multi-Service Container Orchestration
 #
 # Services:
-#   backend   → FastAPI + MongoDB Atlas + Agent + Decision Engine  (port 8000)
-#   n8n       → n8n Workflow Engine                                (port 5678)
-#   frontend  → React Control Tower UI                             (port 5173)
+#   mongodb   → MongoDB 7.0 Document Database                     (port 27017)
+#   backend   → FastAPI + Agent Tools + Simulation Engine         (port 8000)
+#   n8n       → n8n Workflow Automation Engine                     (port 5678)
+#   frontend  → React Control Tower UI (Served via Nginx)          (port 5173 -> 80)
 #
 # Network:
-#   internal_network (bridge) — shared by backend + n8n so n8n can reach
-#   the backend via http://backend:8000 without going through the host.
-#
-# Env file:
-#   Configuration is isolated per-service:
-#   - Backend/n8n: backend/.env
-#   - Frontend:    frontend/.env
-#   Copy the respective .env.example files and fill in real values.
+#   internal_network (bridge) — Shared by backend, mongodb, n8n, frontend
 #
 # Run:
 #   docker compose up --build
 #
 # Endpoints:
+#   Frontend Web App:        http://localhost:5173
 #   Backend API (Swagger):   http://localhost:8000/docs
 #   n8n Workflow UI:         http://localhost:5678
-#   Frontend:                http://localhost:5173
+#   MongoDB Database:        localhost:27017
 # ==============================================================================
 
 services:
+
+  # ── MongoDB (Local Database Service) ─────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: scda-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=supplychaindb
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - internal_network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
 
   # ── Backend (FastAPI) ────────────────────────────────────────────────────────
   backend:
@@ -38,10 +53,15 @@ services:
       - "8000:8000"
     env_file:
       - ./backend/.env
-    volumes:
-      # Mount source for hot-reload during development; remove for frozen prod build.
-      - ./backend/app:/app/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      # If MONGO_URI is not set in backend/.env, default to containerized mongodb service
+      - MONGO_URI=${MONGO_URI:-mongodb://mongodb:27017}
+      - MONGO_DB_NAME=${MONGO_DB_NAME:-supplychaindb}
+      - BACKEND_HOST=0.0.0.0
+      - BACKEND_PORT=8000
+    depends_on:
+      mongodb:
+        condition: service_healthy
     networks:
       - internal_network
     healthcheck:
@@ -49,7 +69,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 15s
     restart: unless-stopped
 
   # ── n8n Workflow Engine ──────────────────────────────────────────────────────
@@ -61,17 +81,12 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      # Tell n8n which port and host to bind to.
       - N8N_HOST=${N8N_HOST:-localhost}
       - N8N_PORT=${N8N_PORT:-5678}
       - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
-      # Public-facing webhook URL (use ngrok/cloudflare tunnel for external ERP events).
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678/}
-      # Encryption key for storing credentials at rest inside n8n.
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
-      # Path inside the container where n8n persists its SQLite DB + workflow data.
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}
       - N8N_USER_FOLDER=${N8N_USER_FOLDER:-/home/node/.n8n}
-      # Pass through all variables that workflow nodes reference via $env.*
       - BACKEND_URL=${BACKEND_URL:-http://backend:8000}
       - BACKEND_API_KEY=${BACKEND_API_KEY}
       - AUTONOMOUS_APPROVAL_LIMIT_USD=${AUTONOMOUS_APPROVAL_LIMIT_USD:-50000}
@@ -83,7 +98,6 @@ services:
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
       - GROQ_TEMPERATURE=${GROQ_TEMPERATURE:-0.1}
     volumes:
-      # Persist n8n workflows, credentials, and execution history across restarts.
       - n8n_data:/home/node/.n8n
     depends_on:
       backend:
@@ -92,39 +106,36 @@ services:
       - internal_network
     restart: unless-stopped
 
-  # ── Frontend (React) ─────────────────────────────────────────────────────────
+  # ── Frontend (React + Nginx SPA) ─────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000
     container_name: scda-frontend
     ports:
-      - "5173:5173"
-    env_file:
-      - ./frontend/.env
-    volumes:
-      - ./frontend/src:/app/src
-    environment:
-      - VITE_API_BASE_URL=http://localhost:8000
+      - "5173:80"
     depends_on:
       backend:
         condition: service_healthy
     networks:
       - internal_network
-    command: npm run dev -- --host 0.0.0.0
     restart: unless-stopped
 
 
 # ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
-  # Named volume for n8n: persists SQLite DB, workflow JSON, and encrypted credentials.
+  # Persistent storage for MongoDB database documents
+  mongodb_data:
+    driver: local
+  # Persistent storage for n8n workflow configurations & execution logs
   n8n_data:
     driver: local
 
 
 # ── Networks ──────────────────────────────────────────────────────────────────
 networks:
-  # Shared bridge network: allows n8n to reach backend at http://backend:8000
-  # and frontend to reach backend at http://backend:8000 — without host exposure.
+  # Shared bridge network for container-to-container internal routing
   internal_network:
     driver: bridge
