@@ -4,7 +4,7 @@ Owner: Developer 2 (Backend / Simulation)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path
-from typing import List
+from typing import List, Optional
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
