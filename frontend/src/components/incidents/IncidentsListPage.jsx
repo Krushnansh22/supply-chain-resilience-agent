@@ -18,15 +18,23 @@ export default function IncidentsListPage() {
   const [incidents, setIncidents] = useState([]);
   const [productions, setProductions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [severityFilter, setSeverityFilter] = useState("ALL");
 
   useEffect(() => {
-    Promise.all([listIncidents("all"), listProductionOrders()])
+    Promise.all([
+      listIncidents("all").catch(() => []),
+      listProductionOrders().catch(() => [])
+    ])
       .then(([incidentsRes, productionsRes]) => {
-        setIncidents(incidentsRes);
-        setProductions(productionsRes);
+        setIncidents(Array.isArray(incidentsRes) ? incidentsRes : []);
+        setProductions(Array.isArray(productionsRes) ? productionsRes : []);
+        setError(null);
       })
-      .catch((err) => console.error("Incidents list load failed:", err))
+      .catch((err) => {
+        console.error("Incidents list load failed:", err);
+        setError("Failed to load incidents list.");
+      })
       .finally(() => setLoading(false));
   }, []);
 

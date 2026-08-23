@@ -21,7 +21,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pymongo.database import Database
 
 from app.mongo_database import get_mongo_db
@@ -33,6 +33,7 @@ from app.core.auth_security import (
     decode_reset_token,
 )
 from app.core.deps import get_current_user
+from app.middleware.rate_limiter import check_rate_limit
 from app.schemas.auth import (
     RegisterRequest,
     LoginRequest,
@@ -73,11 +74,12 @@ def _build_token_response(user: dict) -> dict:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-def register(req: RegisterRequest, response: Response, db: Database = Depends(get_mongo_db)):
+def register(req: RegisterRequest, request: Request, response: Response, db: Database = Depends(get_mongo_db)):
     """
     Register a new user or supplier account.
     Admin accounts cannot be self-registered (must be seeded / promoted by existing admin).
     """
+    check_rate_limit(request, bucket="auth_register", max_calls=10, window_seconds=60)
     # Check duplicate email (case-insensitive)
     existing = db["users"].find_one({"email": req.email.lower()})
     if existing:
@@ -139,11 +141,13 @@ def register(req: RegisterRequest, response: Response, db: Database = Depends(ge
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, response: Response, db: Database = Depends(get_mongo_db)):
+def login(req: LoginRequest, request: Request, response: Response, db: Database = Depends(get_mongo_db)):
     """
     Authenticate with email + password. Returns a JWT access token.
     Uses constant-time password verification to prevent timing attacks.
+    Rate limited to 15 attempts per minute per IP to prevent brute forcing.
     """
+    check_rate_limit(request, bucket="auth_login", max_calls=15, window_seconds=60)
     user = db["users"].find_one({"email": req.email.lower()})
 
     # Always run verify_password even if user not found — constant time
@@ -189,16 +193,13 @@ def get_me(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
-def forgot_password(req: ForgotPasswordRequest, db: Database = Depends(get_mongo_db)):
+def forgot_password(req: ForgotPasswordRequest, request: Request, db: Database = Depends(get_mongo_db)):
     """
     Request a password reset link.
     Always returns the same generic response — does NOT confirm whether
     the email is registered (prevents account enumeration).
-
-    In a production deployment the token would be emailed to the user.
-    For demo purposes the token is included in the response body to
-    allow manual testing without an email server.
     """
+    check_rate_limit(request, bucket="auth_forgot_password", max_calls=10, window_seconds=60)
     user = db["users"].find_one({"email": req.email.lower()})
     if user and user.get("is_active", True):
         token = create_reset_token(req.email.lower())

@@ -29,6 +29,9 @@ from app.agent.states import AgentState
 from app.middleware.security import require_api_key
 from app.middleware.rate_limiter import check_rate_limit
 
+from app.config import settings
+from app.core.deps import get_current_user
+
 router = APIRouter()
 
 _ID_PATTERN = r"^[A-Za-z0-9_-]+$"
@@ -77,6 +80,7 @@ def trigger_agent(
 def agent_state(
     incident_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(get_current_user),
 ):
     return {"incident_id": incident_id, "state": get_agent_state(incident_id, db)}
 
@@ -85,6 +89,7 @@ def agent_state(
 def agent_plan(
     incident_id: str = Path(..., pattern=_ID_PATTERN, min_length=1, max_length=32),
     db: Database = Depends(get_mongo_db),
+    current_user: dict = Depends(get_current_user),
 ):
     plan = db["recovery_plans"].find_one({"incident_id": incident_id}, {"_id": 0})
     if not plan:
@@ -94,7 +99,7 @@ def agent_plan(
             "recommended_option_id": "",
             "recommendation_reason": "No recovery plan has been generated.",
             "requires_human_approval": False,
-            "approval_threshold_usd": 50000,
+            "approval_threshold_usd": settings.AUTONOMOUS_APPROVAL_LIMIT_USD,
         }
     return plan
 

@@ -28,26 +28,32 @@ export default function OverviewDashboard() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState(null);
+
   const load = useCallback(() => {
     Promise.all([
-      listIncidents(),
-      listAuditLogs(),
-      listProductionOrders(),
-      listSuppliers(),
+      listIncidents().catch(() => []),
+      listAuditLogs().catch(() => []),
+      listProductionOrders().catch(() => []),
+      listSuppliers().catch(() => []),
     ])
       .then(([incidentsRes, auditRes, productionRes, suppliersRes]) => {
-        setIncidents(incidentsRes);
-        setAuditLogs(auditRes);
-        setProductionOrders(productionRes);
-        setSuppliers(suppliersRes);
+        setIncidents(Array.isArray(incidentsRes) ? incidentsRes : []);
+        setAuditLogs(Array.isArray(auditRes) ? auditRes : []);
+        setProductionOrders(Array.isArray(productionRes) ? productionRes : []);
+        setSuppliers(Array.isArray(suppliersRes) ? suppliersRes : []);
+        setError(null);
       })
-      .catch((err) => console.error("Overview load failed:", err))
+      .catch((err) => {
+        console.error("Overview load failed:", err);
+        setError("Failed to load overview data.");
+      })
       .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 3000);
+    const interval = setInterval(load, 10000);
     return () => clearInterval(interval);
   }, [load]);
 
@@ -55,6 +61,14 @@ export default function OverviewDashboard() {
     return (
       <div style={{ padding: "40px 0", color: "var(--text-muted)", fontSize: 14, fontFamily: "var(--font-display)" }}>
         Loading dashboard...
+      </div>
+    );
+  }
+
+  if (error && incidents.length === 0 && suppliers.length === 0) {
+    return (
+      <div style={{ padding: "40px 0", color: "var(--red-accent)", fontSize: 14, fontFamily: "var(--font-display)" }}>
+        {error}
       </div>
     );
   }

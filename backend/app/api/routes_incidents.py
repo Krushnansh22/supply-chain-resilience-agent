@@ -11,7 +11,7 @@ DELIVERS:
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from typing import List
 from pymongo.database import Database
 
@@ -19,6 +19,7 @@ from app.mongo_database import get_mongo_db
 from app.repositories.incident_repository import IncidentRepository
 from app.schemas.common import IncidentOut, AuditLogOut
 from app.core.deps import get_current_user
+from app.services.report_generator import fetch_report_context, generate_report_narrative, generate_report_bundle
 
 router = APIRouter()
 
@@ -47,7 +48,11 @@ def list_incidents(
     """List operational incidents by default; diagnostics remain queryable separately."""
     query = {}
     if current_user["role"] == "supplier":
-        query["supplier_id"] = current_user.get("supplier_id")
+        supplier_id = current_user.get("supplier_id")
+        if supplier_id:
+            query["supplier_id"] = supplier_id
+        else:
+            return []
     
     if category == "operational":
         query.update({"type": {"$ne": "DATA_INCONSISTENCY"}, "status": {"$in": ACTIVE_STATUSES}})
@@ -107,10 +112,6 @@ def get_incident_activity(
         seen.add(fingerprint)
         unique_logs.append(log)
     return unique_logs
-
-
-from fastapi import Response
-from app.services.report_generator import fetch_report_context, generate_report_narrative, generate_report_bundle
 
 
 @router.get("/{incident_id}/report")
